@@ -1,0 +1,22 @@
+{
+  "name": "aura-farm-6767",
+  "version": "1.0.0",
+  "description": "병맛 1대1 멀티 FPS. 눈깔 튀어나오고 아우라 파밍하고 6-7 외치는 게임",
+  "main": "server/index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test test/match.test.js"
+  },
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "three": "^0.187.0",
+    "ws": "^8.22.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

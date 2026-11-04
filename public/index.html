@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AURA FARM 6767</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗿</text></svg>">
+<link rel="stylesheet" href="/style.css">
+<script type="importmap">{ "imports": { "three": "/vendor/three/three.module.js" } }</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<!-- 경기 화면 -->
+<div id="hud" hidden>
+  <div id="vignette"></div>
+  <div id="ultraFrame" hidden><span>SIGMA MODE</span></div>
+  <div id="hudGameLayer">
+    <div id="scoreBox">
+      <span id="nameMe">나</span>
+      <b id="scoreMe">0</b>
+      <div id="timerBox"><small>먼저 7킬</small><i id="timer">6:07</i></div>
+      <b id="scoreEnemy">0</b>
+      <span id="nameEnemy">상대</span>
+    </div>
+    <div id="killfeed"></div>
+    <div id="eventBanner" hidden></div>
+
+    <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+    <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
+    <div id="damageDir"></div>
+    <div id="sixSeven"></div>
+    <div id="bigCount" hidden></div>
+    <div id="shout"></div>
+    <div id="auraPops"></div>
+
+    <div id="bigEyes"><div class="bigeye l"><u></u></div><div class="bigeye r"><u></u></div></div>
+
+    <div id="vitals">
+      <div class="bar hp"><div id="hpBar"></div><span id="hpText">정신력 100</span></div>
+      <div class="bar aura"><div id="auraBar"></div><span id="auraText">AURA 0 / 6,767</span></div>
+      <div id="ultraReady" hidden>E 눌러서 시그마 각성</div>
+    </div>
+    <div id="weaponBox">
+      <div id="reloadText" hidden></div>
+      <div id="weaponName">💨 방귀 기관총</div>
+      <div id="ammo">67 / 67</div>
+    </div>
+    <div id="keys">
+      <span><kbd>G</kbd> 꾹: 아우라 파밍</span>
+      <span><kbd>T</kbd> 꾹: 6-7</span>
+      <span><kbd>F</kbd> 싸대기</span>
+      <span><kbd>Shift</kbd> 대시</span>
+      <span><kbd>Space</kbd>×2 이단점프</span>
+      <span><kbd>1 2 3</kbd> 무기</span>
+    </div>
+    <div id="ticker"></div>
+
+    <div id="killCut" hidden>
+      <div class="lines"></div>
+      <div class="cutface"><div class="bigeye l"><u></u></div><div class="bigeye r"><u></u></div><div class="cutmouth"></div></div>
+      <div id="killCutText"></div>
+    </div>
+
+    <div id="death" hidden>
+      <h2 id="deathLine">스킬 이슈</h2>
+      <p id="deathBy"></p>
+      <div class="respawn"><div id="deathBar"></div></div>
+      <small>부활 중... 그동안 상대 아우라 감상하셈</small>
+    </div>
+
+    <div id="lockHint" hidden><b>클릭해서 참전</b><small>Esc 누르면 마우스 풀림</small></div>
+  </div>
+  <div id="rain"></div>
+</div>
+
+<!-- 첫 화면: 방 목록 -->
+<section id="home" class="panelScreen" hidden>
+  <header class="logo">
+    <h1><span>AURA FARM</span><em>6767</em></h1>
+    <p>1대1 눈깔 적출 FPS</p>
+  </header>
+  <div class="card">
+    <label>닉네임<input id="nameInput" maxlength="12" placeholder="익명의 NPC" autocomplete="off"></label>
+    <div class="row">
+      <input id="roomNameInput" maxlength="20" placeholder="방 이름 (대충)" autocomplete="off">
+      <button id="createBtn" class="primary">방 만들기</button>
+    </div>
+    <h2>열린 방</h2>
+    <div id="roomList"></div>
+    <div class="foot">
+      <span id="connStatus">서버 찾는 중...</span>
+      <span id="ping"></span>
+      <label class="vol">🔊 <input id="volume" type="range" min="0" max="1" step="0.05" value="0.8"></label>
+    </div>
+  </div>
+</section>
+
+<!-- 대기실 -->
+<section id="room" class="panelScreen roomLayout" hidden>
+  <div class="card side">
+    <div class="titleRow"><h2 id="roomTitle">대기실</h2><button id="leaveBtn" class="ghost">나가기</button></div>
+    <div id="slots"></div>
+    <button id="readyBtn" class="primary big">준비</button>
+    <div class="row">
+      <button id="botBtn" class="ghost">🤖 봇 부르기</button>
+      <button id="copyBtn" class="ghost">🔗 <span id="hostHint"></span></button>
+    </div>
+    <h3>내 캐릭터</h3>
+    <div id="skinPick"></div>
+  </div>
+  <div class="card side right">
+    <h3>채팅</h3>
+    <div id="chatLog"></div>
+    <form id="chatForm" class="row"><input id="chatInput" maxlength="120" placeholder="도발 한마디" autocomplete="off"><button class="ghost">전송</button></form>
+    <h3>조작</h3>
+    <ul class="help">
+      <li><b>WASD</b> 이동 · <b>Space</b> 점프(2단) · <b>Shift</b> 대시</li>
+      <li><b>좌클릭</b> 발사 · <b>우클릭</b> 줌 · <b>R</b> 장전 · <b>1 2 3</b> 무기</li>
+      <li><b>F</b> 싸대기 (67 데미지, 날려버림)</li>
+      <li><b>G 꾹</b> 아우라 파밍 · <b>T 꾹</b> 6-7</li>
+      <li>아우라 6,767 채우고 <b>E</b> = 시그마 각성</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 결과 -->
+<section id="result" class="panelScreen" hidden>
+  <div class="resultBox">
+    <div id="sixSevenBanner" hidden>6 : 7 SIX SEVEN 실화냐</div>
+    <h1 id="resultTitle"></h1>
+    <p id="resultSub"></p>
+    <div id="resultStats"></div>
+    <p id="resultCountdown"></p>
+  </div>
+</section>
+
+<div id="toast" hidden></div>
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>
