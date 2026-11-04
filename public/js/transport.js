@@ -3,6 +3,7 @@
 //  - GitHub Pages 방장: 이 브라우저 안에서 서버 코드를 돌림 + 친구는 WebRTC로 붙음
 //  - GitHub Pages 손님: 초대 코드로 방장에게 WebRTC 연결
 const PREFIX = 'aura6767-';
+const SILENCE_MS = 10000; // 이만큼 아무 신호 없으면 끊긴 걸로 본다 (창을 그냥 닫으면 close가 늦게 온다)
 const params = new URLSearchParams(location.search);
 
 export const P2P = location.hostname.endsWith('github.io') || params.has('p2p');
@@ -89,6 +90,7 @@ class HostTransport extends Fake {
     this.peer = peer;
     peer.on('open', () => { this.code = code; });
     peer.on('connection', (conn) => this.addGuest(conn));
+    peer.on('disconnected', () => { if (!peer.destroyed) peer.reconnect(); }); // 새 손님을 받으려면 필요
     peer.on('error', (e) => {
       if (e.type === 'unavailable-id' && attempt < 5) {
         peer.destroy();
@@ -103,9 +105,12 @@ class HostTransport extends Fake {
   addGuest(conn) {
     conn.on('open', () => {
       const c = this.hub.connect((raw) => { if (conn.open) conn.send(raw); });
-      conn.on('data', (d) => c.message(d));
-      conn.on('close', () => c.close());
-      conn.on('error', () => c.close());
+      let lastData = Date.now();
+      const bye = () => { clearInterval(watch); c.close(); };
+      const watch = setInterval(() => { if (Date.now() - lastData > SILENCE_MS) { bye(); conn.close(); } }, 2000);
+      conn.on('data', (d) => { lastData = Date.now(); c.message(d); });
+      conn.on('close', bye);
+      conn.on('error', bye);
     });
   }
 }
@@ -128,8 +133,17 @@ class GuestTransport extends Fake {
       this.peer.on('open', () => {
         const conn = this.peer.connect(PREFIX + this.code, { serialization: 'raw', reliable: true });
         this.conn = conn;
-        conn.on('open', () => { clearTimeout(timeout); this.opened(); });
-        conn.on('data', (d) => this.deliver(d));
+        let lastData = Date.now();
+        conn.on('open', () => {
+          clearTimeout(timeout);
+          lastData = Date.now();
+          const watch = setInterval(() => {
+            if (this.readyState === 3) clearInterval(watch);
+            else if (Date.now() - lastData > SILENCE_MS) this.closed();
+          }, 2000);
+          this.opened();
+        });
+        conn.on('data', (d) => { lastData = Date.now(); this.deliver(d); });
         conn.on('close', () => this.closed());
         conn.on('error', () => this.closed());
       });
