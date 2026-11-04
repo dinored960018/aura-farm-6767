@@ -1,5 +1,5 @@
 // 경기 화면 위 DOM 연출 전부. 이름 같은 값은 textContent로만 넣는다.
-import { AURA_MAX, WEAPONS, ULTRAS } from '/shared/constants.js';
+import { AURA_MAX, WEAPONS, ULTRAS } from '../shared/constants.js';
 import { WEAPON_LABEL, pick } from './memes.js';
 
 const $ = (id) => document.getElementById(id);

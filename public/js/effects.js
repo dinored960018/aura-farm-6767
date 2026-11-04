@@ -1,6 +1,6 @@
 // 스프라이트 글자, 궤적, 튀는 눈깔, 공습 개 비행기
 import * as THREE from 'three';
-import { groundAt } from '/shared/map.js';
+import { groundAt } from '../shared/map.js';
 
 const texCache = new Map();
 

@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AURA FARM 6767</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗿</text></svg>">
-<link rel="stylesheet" href="/style.css">
-<script type="importmap">{ "imports": { "three": "/vendor/three/three.module.js" } }</script>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three/three.module.js" } }</script>
 </head>
 <body>
 <canvas id="view"></canvas>
@@ -93,6 +93,10 @@
       <input id="roomNameInput" maxlength="20" placeholder="방 이름 (대충)" autocomplete="off">
       <button id="createBtn" class="primary">방 만들기</button>
     </div>
+    <form id="joinRow" class="row" hidden>
+      <input id="joinInput" maxlength="8" placeholder="친구한테 받은 초대 코드" autocomplete="off">
+      <button class="ghost">코드로 참가</button>
+    </form>
     <h2>열린 방</h2>
     <div id="roomList"></div>
     <div class="foot">
@@ -112,7 +116,7 @@
     <div class="row">
       <button id="botBtn" class="ghost">🤖 봇+</button>
       <button id="botOutBtn" class="ghost">봇−</button>
-      <button id="copyBtn" class="ghost" title="주소 복사">🔗 복사</button>
+      <button id="copyBtn" class="ghost" title="주소 복사">🔗 초대</button>
     </div>
     <h3>맵</h3>
     <div id="mapPick"></div>
@@ -148,6 +152,6 @@
 </section>
 
 <div id="toast" hidden></div>
-<script type="module" src="/js/main.js"></script>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>

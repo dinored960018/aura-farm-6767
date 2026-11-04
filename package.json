@@ -8,11 +8,14 @@
   },
   "scripts": {
     "start": "node server/index.js",
-    "test": "node --test test/match.test.js"
+    "test": "node --test test/match.test.js",
+    "build:pages": "node scripts/build-pages.mjs",
+    "deploy:pages": "node scripts/build-pages.mjs deploy"
   },
   "license": "MIT",
   "type": "module",
   "dependencies": {
+    "peerjs": "^1.5.5",
     "three": "^0.187.0",
     "ws": "^8.22.1"
   },

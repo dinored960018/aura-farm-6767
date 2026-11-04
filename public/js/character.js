@@ -1,6 +1,6 @@
 // 대두 + 왕눈깔 캐릭터. 맞으면 눈이 용수철처럼 튀어나온다. 앞쪽은 -Z.
 import * as THREE from 'three';
-import { SKINS } from '/shared/constants.js';
+import { SKINS } from '../shared/constants.js';
 
 const lambert = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
 const basic = (color, extra = {}) => new THREE.MeshBasicMaterial({ color, ...extra });

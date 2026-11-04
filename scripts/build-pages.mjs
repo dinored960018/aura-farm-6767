@@ -1,0 +1,34 @@
+// GitHub Pages용 정적 파일을 dist/ 에 모은다. 인자로 deploy를 주면 gh-pages 브랜치에 올린다.
+import fs from 'node:fs';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dist = path.join(root, 'dist');
+fs.rmSync(dist, { recursive: true, force: true });
+fs.cpSync(path.join(root, 'public'), dist, { recursive: true });
+fs.cpSync(path.join(root, 'shared'), path.join(dist, 'shared'), { recursive: true });
+fs.mkdirSync(path.join(dist, 'server'));
+for (const f of ['hub.js', 'room.js', 'player.js', 'bot.js', 'nav.js']) {
+  fs.copyFileSync(path.join(root, 'server', f), path.join(dist, 'server', f));
+}
+fs.mkdirSync(path.join(dist, 'vendor/three'), { recursive: true });
+for (const f of ['three.module.js', 'three.core.js']) {
+  fs.copyFileSync(path.join(root, 'node_modules/three/build', f), path.join(dist, 'vendor/three', f));
+}
+fs.mkdirSync(path.join(dist, 'vendor/peerjs'));
+fs.copyFileSync(path.join(root, 'node_modules/peerjs/dist/peerjs.min.js'), path.join(dist, 'vendor/peerjs/peerjs.min.js'));
+fs.writeFileSync(path.join(dist, '.nojekyll'), '');
+console.log('dist 생성');
+
+if (process.argv[2] === 'deploy') {
+  const remote = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: root, encoding: 'utf8' }).trim();
+  const git = (...a) => execFileSync('git', a, { cwd: dist, stdio: 'inherit' });
+  git('init', '-q', '-b', 'gh-pages');
+  git('add', '-A');
+  git('-c', 'user.name=dinored', '-c', 'user.email=dinored960018@users.noreply.github.com', 'commit', '-q', '-m', 'GitHub Pages 배포');
+  git('push', '-q', '-f', remote, 'gh-pages');
+  fs.rmSync(path.join(dist, '.git'), { recursive: true, force: true });
+  console.log('gh-pages 배포 완료');
+}

@@ -1,9 +1,10 @@
 // 접속, 방 목록, 대기실, 결과 화면. 경기가 끝나면 항상 대기실로 돌아온다.
-import { SKINS, SKIN_IDS, WIN_KILLS, MAX_PLAYERS, ULTRAS } from '/shared/constants.js';
-import { MAPS, MAP_IDS } from '/shared/map.js';
+import { SKINS, SKIN_IDS, WIN_KILLS, MAX_PLAYERS, ULTRAS } from '../shared/constants.js';
+import { MAPS, MAP_IDS } from '../shared/map.js';
 import { Sfx } from './audio.js';
 import { Hud } from './hud.js';
 import { Game } from './game.js';
+import { P2P, inviteUrl, openTransport } from './transport.js';
 import { TICKER, RESULT_WIN, RESULT_LOSE, SKIN_FACE, pick } from './memes.js';
 
 const $ = (id) => document.getElementById(id);
@@ -32,11 +33,10 @@ let reconnectTimer = 0;
 let pingTimer = 0;
 
 function connect() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(`${proto}://${location.host}/ws`);
+  const ws = openTransport();
   net.ws = ws;
   ws.onopen = () => {
-    $('connStatus').textContent = '서버 연결됨';
+    $('connStatus').textContent = ws.isHost ? '이 브라우저가 서버' : ws.isGuest ? '방장에게 연결됨' : '서버 연결됨';
     $('connStatus').classList.add('ok');
     sendHello();
     clearInterval(pingTimer);
@@ -49,6 +49,11 @@ function connect() {
   };
   ws.onclose = () => {
     clearInterval(pingTimer);
+    if (ws.isGuest) {
+      // 방장이 나갔거나 코드가 틀림: 첫 화면으로
+      leaveToHome(joined ? '방장이 나가서 끝남' : '그 초대 코드로 못 들어감. 방장 창이 켜져 있어야 함');
+      return;
+    }
     $('connStatus').textContent = '서버 끊김. 다시 붙는 중...';
     $('connStatus').classList.remove('ok');
     if (inMatch) leaveMatchView();
@@ -66,7 +71,27 @@ function sendHello() {
 }
 
 const H = net.handlers;
-H.welcome = (m) => { net.id = m.id; renderRooms(m.rooms); };
+let joined = false;
+function leaveToHome(text) {
+  toast(text);
+  $('connStatus').textContent = text;
+  setTimeout(() => {
+    const u = new URL(location.href);
+    u.searchParams.delete('room');
+    location.href = u.href;
+  }, 2500);
+}
+H.welcome = (m) => {
+  net.id = m.id;
+  renderRooms(m.rooms);
+  // 초대 링크로 왔으면 바로 입장
+  if (net.ws.isGuest && !joined) {
+    if (!m.rooms.length) { toast('방이 아직 없음'); return; }
+    joined = true;
+    sendHello();
+    net.send({ t: 'join', id: m.rooms[0].id });
+  }
+};
 H.pong = (m) => {
   const now = Date.now();
   net.rtt = now - m.c;
@@ -164,6 +189,7 @@ window.addEventListener('keydown', firstGesture, { once: true });
 $('createBtn').onclick = () => {
   sfx.unlock();
   sendHello();
+  net.ws.openInvites?.(() => toast('초대 서버 연결 실패. 봇전은 됨'));
   net.send({ t: 'create', name: $('roomNameInput').value });
   sfx.boing();
 };
@@ -307,10 +333,15 @@ $('botBtn').onclick = () => {
 $('botOutBtn').onclick = () => net.send({ t: 'removeBot' });
 $('leaveBtn').onclick = () => net.send({ t: 'leave' });
 $('copyBtn').onclick = async () => {
-  const url = location.href.split('#')[0];
+  const { ws } = net;
+  if (P2P && !ws.code) {
+    toast(ws.peerFailed ? '초대 서버 연결 실패. 봇전만 가능' : '초대 코드 받는 중. 잠깐만');
+    return;
+  }
+  const url = P2P ? inviteUrl(ws.code) : location.href.split('#')[0];
   try {
     await navigator.clipboard.writeText(url);
-    toast('주소 복사함');
+    toast(P2P ? `초대 링크 복사함 (코드 ${ws.code})` : '주소 복사함');
   } catch { toast(url); }
 };
 
@@ -438,6 +469,16 @@ window.addEventListener('keydown', (e) => {
     toast(m ? '음소거. 근데 이 게임은 소리가 본체임' : '소리 켬');
   }
 });
+
+// GitHub Pages: 코드로 참가
+if (P2P) {
+  $('joinRow').hidden = false;
+  $('joinRow').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const code = $('joinInput').value.trim().toUpperCase();
+    if (code) location.href = inviteUrl(code);
+  });
+}
 
 // 시작
 showScreen('home');

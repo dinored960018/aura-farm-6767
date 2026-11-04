@@ -2,9 +2,9 @@
 import * as THREE from 'three';
 import {
   WEAPONS, LASER, ULTRAS, MOVE, PLAYER, SLAP, BOMB, EVENTS, AURA_MAX, INTERP_MS, MATCH_SECONDS, TICK_HZ,
-} from '/shared/constants.js';
-import { MAPS, DEFAULT_MAP, rayWorld, rayPlayer } from '/shared/map.js';
-import { newBody, stepBodyFixed } from '/shared/physics.js';
+} from '../shared/constants.js';
+import { MAPS, DEFAULT_MAP, rayWorld, rayPlayer } from '../shared/map.js';
+import { newBody, stepBodyFixed } from '../shared/physics.js';
 import { Character, glowTexture } from './character.js';
 import { Effects, textTexture } from './effects.js';
 import { KILL_LINES, DEATH_LINES, FALL_LINES, pick } from './memes.js';
