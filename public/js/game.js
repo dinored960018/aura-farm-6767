@@ -1,7 +1,7 @@
 // 3D 세계와 1인칭 조작. 서버 메시지를 받아 눈깔을 튀어나오게 한다.
 import * as THREE from 'three';
 import {
-  WEAPONS, LASER, SHARK, MOVE, PLAYER, SLAP, BOMB, AURA_MAX, INTERP_MS, MATCH_SECONDS, TICK_HZ,
+  WEAPONS, LASER, CHILL, MOVE, PLAYER, SLAP, BOMB, AURA_MAX, INTERP_MS, MATCH_SECONDS, TICK_HZ,
 } from '../shared/constants.js';
 import { MAPS, DEFAULT_MAP, rayWorld, rayPlayer } from '../shared/map.js';
 import { newBody, stepBodyFixed } from '../shared/physics.js';
@@ -168,7 +168,7 @@ export class Game {
     this.cineUntil = 0;
     this.charmUntil = 0;
     this.charmBy = null;
-    this.stunUntil = 0;
+    this.slowUntil = 0;
     this.cinePos = null;
     this.aura = 0;
     this.hp = 100;
@@ -752,8 +752,9 @@ export class Game {
       this.ultraOff();
       const line = pick(lines(m.weapon === 'fall' ? 'fall' : 'death'));
       this.setGrabbed(null);
-      this.charmUntil = this.stunUntil = 0;
+      this.charmUntil = this.slowUntil = 0;
       this.hud.setCharm(0);
+      this.hud.setSlow(0);
       this.hud.deathScreen(line, killerName, m.weapon, m.respawnMs);
       this.sfx.sadTrombone();
       this.sfx.bigFart();
@@ -874,18 +875,28 @@ export class Game {
     this.hud.shout(t('shout.charm', { name: this.nameOf(m.id) }), 'red');
   }
 
-  onStun(m) {
+  // 스트리머가 짖을 때
+  onBark(m) {
+    const ahead = 3;
+    const pos = [m.pos[0] - Math.sin(m.yaw) * ahead, m.pos[1] + 1.8, m.pos[2] - Math.cos(m.yaw) * ahead];
+    this.effects.ring([m.pos[0] - Math.sin(m.yaw) * 5, m.pos[1], m.pos[2] - Math.cos(m.yaw) * 5], m.range * 0.5, 0xff3344);
+    this.effects.text(pos, 'WOOF!', { color: '#ff3344', scale: 1.7, life: 0.55 });
+    this.sfx.bark();
+    const d = Math.hypot(this.body.x - m.pos[0], this.body.z - m.pos[2]);
+    if (d < m.range) this.shake = Math.min(1, this.shake + 0.25);
+  }
+
+  onSlow(m) {
+    const c = this.chars.get(m.to);
+    if (c) this.effects.text([c.root.position.x, c.root.position.y + 2.8, c.root.position.z], '😌', { scale: 1.1, life: 1.2, stroke: null });
     if (m.to !== this.myId) return;
-    this.stunUntil = performance.now() + m.ms;
-    this.emote = 0;
-    this.mouseDown = false;
-    this.hud.shout(t('shout.stun', { name: this.nameOf(m.id) }), 'red');
-    this.sfx.bonk();
+    this.slowUntil = performance.now() + m.ms;
+    this.hud.setSlow(m.ms);
+    this.hud.shout(t('shout.slow', { name: this.nameOf(m.id) }), 'gold');
   }
 
   disabled() {
-    const t = performance.now();
-    return t < this.stunUntil || t < this.charmUntil;
+    return performance.now() < this.charmUntil;
   }
 
   // 오펜하이머: 위로 올라가는 현악기 → 번쩍 → 잠깐 정적 → 쾅
@@ -929,22 +940,20 @@ export class Game {
     } else if (kind === 'toilet') {
       this.sfx.flush(ms);
       this.sfx.say('flush', { pitch: 0.1, rate: 0.5 });
-    } else if (kind === 'shark') {
+    } else if (kind === 'streamer') {
+      this.sfx.airhorn();
+      this.hud.rain(['W', 'W', 'L', '🔥', '💀', 'CHAT', '🐶'], 12);
+    } else if (kind === 'hero') {
       this.sfx.vineBoom();
-      this.sfx.say('tralalero tralala', { lang: 'it-IT', pitch: 0.4, rate: 1.1 });
+      this.sfx.say('think! think!', { pitch: 0.2, rate: 0.75 });
+    } else if (kind === 'chill') {
+      this.sfx.sparkle();
+      this.sfx.say('just a chill guy', { pitch: 0.5, rate: 0.7 });
     } else if (kind === 'tung') {
       this.sfx.say('tung tung tung sahur', { pitch: 0.2, rate: 0.9 });
-    } else if (kind === 'croc') {
-      this.effects.dogPlane(1, 24);
-      setTimeout(() => this.effects.dogPlane(-1, 28), 1700);
-      this.sfx.planeFlyby();
-      this.sfx.say('bombardiro crocodilo', { lang: 'it-IT', pitch: 0.3, rate: 0.9 });
     } else if (kind === 'rizz') {
       this.sfx.sparkle();
       this.sfx.say('rizz', { pitch: 0.2, rate: 0.5 });
-    } else if (kind === 'boss') {
-      this.sfx.bong();
-      this.sfx.say(t('tts.boss'), { lang: ttsLang(), pitch: 0.3, rate: 0.8 });
     }
   }
 
@@ -963,7 +972,7 @@ export class Game {
         this.hud.setUltra(true, m.ms, ultraName);
         this.fovKick = 22;
         if (this.infAmmo()) this.reloadT = 0;
-        if (m.kind === 'cat') {
+        if (m.kind === 'cat' || m.kind === 'hero') {
           this.forced = true;
           this.reloadT = 0;
           this.setHudVisible(false);
@@ -1254,9 +1263,8 @@ export class Game {
     const k = this.keys;
     const held = (c) => k.has(c);
     let emote = 0;
-    const stunned = performance.now() < this.stunUntil;
     const charmed = performance.now() < this.charmUntil;
-    if (!this.frozen && this.body.onGround && !this.ultraKind && !stunned && !charmed) {
+    if (!this.frozen && this.body.onGround && !this.ultraKind && !charmed) {
       if (held('KeyG')) emote = 1;
       else if (held('KeyT')) emote = 2;
     }
@@ -1269,8 +1277,7 @@ export class Game {
 
     let fwd = emote || this.frozen ? 0 : (held('KeyW') ? 1 : 0) - (held('KeyS') ? 1 : 0);
     let right = emote || this.frozen ? 0 : (held('KeyD') ? 1 : 0) - (held('KeyA') ? 1 : 0);
-    if (stunned) { fwd = 0; right = 0; }
-    if (charmed && !stunned) {
+    if (charmed) {
       // 반한 사람에게 저절로 걸어간다
       const r = this.renderOf(this.charmBy);
       right = 0;
@@ -1281,12 +1288,11 @@ export class Game {
         fwd = Math.hypot(dx, dz) > 1.6 ? 1 : 0;
       }
     }
-    const locked = stunned || charmed;
-    if (locked) { this.jumpQueued = false; this.dashQueued = false; this.shotQueued = false; }
+    if (charmed) { this.jumpQueued = false; this.dashQueued = false; this.shotQueued = false; }
     const opts = {
       map: this.map,
       gravityMul: this.eventKind === 'moon' ? 0.35 : 1,
-      speedMul: this.ultraKind === 'sigma' ? MOVE.ultraSpeedMul : this.ultraKind === 'shark' ? SHARK.speedMul : this.grabbedBy !== null ? 0.55 : 1,
+      speedMul: this.ultraKind === 'sigma' ? MOVE.ultraSpeedMul : performance.now() < this.slowUntil ? CHILL.slowMul : this.grabbedBy !== null ? 0.55 : 1,
     };
     const events = stepBodyFixed(this.body, {
       fwd, right, yaw: this.yaw, jump: this.jumpQueued && !this.frozen, dash: this.dashQueued && !this.frozen,

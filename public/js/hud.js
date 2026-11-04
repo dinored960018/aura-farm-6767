@@ -16,7 +16,7 @@ export class Hud {
       vignette: $('vignette'), lock: $('lockHint'), cut: $('killCut'), cutText: $('killCutText'), death: $('death'),
       deathLine: $('deathLine'), deathBy: $('deathBy'), deathBar: $('deathBar'), event: $('eventBanner'),
       ultra: $('ultraFrame'), ultraLabel: $('ultraLabel'), ultraReady: $('ultraReady'), claws: $('claws'), grab: $('grabFace'),
-      charm: $('charmFx'), oppen: $('oppen'), oppenBy: $('oppenBy'), flash: $('nukeFlash'), rain: $('rain'), dir: $('damageDir'), six: $('sixSeven'),
+      charm: $('charmFx'), slow: $('slowFx'), oppen: $('oppen'), oppenBy: $('oppenBy'), flash: $('nukeFlash'), rain: $('rain'), dir: $('damageDir'), six: $('sixSeven'),
     };
     this.prev = {};
   }
@@ -35,6 +35,7 @@ export class Hud {
     this.setUltra(false);
     this.setGrabbed(false);
     this.setCharm(0);
+    this.setSlow(0);
     this.el.oppen.hidden = true;
     this.el.chips.replaceChildren();
     this.show(true);
@@ -244,6 +245,12 @@ export class Hud {
     clearTimeout(this.charmTimer);
     this.el.charm.hidden = !ms;
     if (ms) this.charmTimer = setTimeout(() => { this.el.charm.hidden = true; }, ms);
+  }
+
+  setSlow(ms) {
+    clearTimeout(this.slowTimer);
+    this.el.slow.hidden = !ms;
+    if (ms) this.slowTimer = setTimeout(() => { this.el.slow.hidden = true; }, ms);
   }
 
   oppenheimer(ms, by) {

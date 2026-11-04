@@ -63,10 +63,9 @@ export class Bot extends Player {
     if (!this.alive) return;
     const map = room.map;
     const eye = [this.pos[0], this.pos[1] + PLAYER.eye, this.pos[2]];
-    const opts = { map, gravityMul: room.event?.kind === 'moon' ? 0.35 : 1, speedMul: this.ultraKind === 'shark' ? 1.5 : 0.82 };
-    const stunned = now < this.stunUntil;
+    const opts = { map, gravityMul: room.event?.kind === 'moon' ? 0.35 : 1, speedMul: now < this.slowUntil ? 0.33 : 0.82 };
     const charmed = now < this.charmUntil && this.charmBy?.alive;
-    const t = stunned ? null : this.chooseTarget(room, eye, charmed ? this.charmBy : null);
+    const t = this.chooseTarget(room, eye, charmed ? this.charmBy : null);
     if (!t) {
       stepBodyFixed(this.body, { fwd: 0, right: 0, yaw: this.yaw }, dt, opts);
       this.pos = [this.body.x, this.body.y, this.body.z];
@@ -106,7 +105,7 @@ export class Bot extends Player {
     // 이동: 가까우면 좌우로 비비고, 멀면 길찾기
     const input = { fwd: 0, right: 0, yaw: this.yaw, jump: false, dash: false };
     if (!emoting) {
-      if (canSee && dist <= 7 && !charmed && this.ultraKind !== 'shark') {
+      if (canSee && dist <= 7 && !charmed) {
         input.fwd = dist < 4 ? -0.6 : 0;
         input.right = this.strafe;
         const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);

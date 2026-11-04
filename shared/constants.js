@@ -46,10 +46,11 @@ export const BOMB = { radius: 5, damage: 45, knock: 16, fuseMs: 2000 };
 
 export const NUKE = { radius: 20, damage: 220, knock: 30, fuseMs: 2600, aimRange: 70 };
 export const CAT = { flySpeed: 38, latchRange: 1.3, tickMs: 150, damage: 6.7 };
-export const SHARK = { speedMul: 1.9, range: 2.5, tickMs: 250, damage: 22, knock: 15 };
+export const BARK = { range: 16, cone: 0.6, tickMs: 800, damage: 24, knock: 22 };
+export const HERO = { flySpeed: 60, hits: 3, range: 1.5, damage: 45, knock: 28 };
+export const CHILL = { radius: 18, slowMul: 0.4 };
 export const TUNG = { radius: 11, tickMs: 670, damage: 17, knock: 12 };
 export const RIZZ = { radius: 26 };
-export const BOSS = { stunMs: 1300 };
 export const FLUSH = { radius: 17, coreRadius: 3.5, pull: 9, tickMs: 200, damage: 10 };
 
 // 스킨마다 다른 각성
@@ -59,11 +60,11 @@ export const ULTRAS = {
   cat: { name: '냥냥 급습', ms: 6700, desc: '벽 뚫고 날아가 얼굴에 붙어 할큄. 맞는 쪽은 F로 떼어냄' },
   cone: { name: '오펜하이머', ms: 2600, desc: '조준한 곳에 핵. 2.6초 뒤 터짐. 벽 뒤면 절반' },
   toilet: { name: '대물내림', ms: 5000, desc: '5초간 주변을 빨아들이고 코앞이면 갈아버림' },
-  shark: { name: '상어 돌진', ms: 5000, desc: '5초간 이동 1.9배. 몸에 닿는 놈은 물어뜯고 날려버림' },
+  streamer: { name: '짖기 방송', ms: 4800, desc: '6번 짖어서 앞쪽 상대를 날려버림' },
   tung: { name: '사후르 타임', ms: 4700, desc: '퉁! 퉁! 퉁! 7번의 충격파. 주변을 띄우고 데미지' },
-  croc: { name: '융단폭격', ms: 5800, desc: '폭탄 13발을 상대들 머리 위로. 나는 안 맞음' },
+  hero: { name: '무적 펀치', ms: 5000, desc: '벽 뚫고 날아가 상대 셋을 차례로 관통' },
   rizz: { name: '리즈 매혹', ms: 3500, desc: '주변 상대가 3.5초간 나한테 걸어오고 공격 못 함' },
-  boss: { name: '전원 집합', ms: 3000, desc: '상대 전원을 내 앞으로 소환. 1.3초간 차렷' },
+  chill: { name: '완전 칠함', ms: 5000, desc: '5초간 무적. 주변 상대는 느려짐' },
 };
 
 export const EVENTS = {
@@ -80,11 +81,11 @@ export const SKINS = {
   cat: { name: '킹받는 고양이', skin: 0xff9a3c, shirt: 0xf5f5f5 },
   cone: { name: '오하이오 주민', skin: 0x7fdc5a, shirt: 0x8a3ffc },
   toilet: { name: '변기맨', skin: 0xffc6a8, shirt: 0xffffff },
-  shark: { name: '트랄랄레로', skin: 0x6fa8dc, shirt: 0x6fa8dc },
+  streamer: { name: '짖는 스트리머', skin: 0x6e4426, shirt: 0xd81e2c },
   tung: { name: '퉁퉁퉁 사후르', skin: 0xa8743f, shirt: 0x8f5f30 },
-  croc: { name: '봄바르디로', skin: 0x4f9a3c, shirt: 0x8d99a6 },
+  hero: { name: '인빈시브로', skin: 0xf2c6a0, shirt: 0xffd21f },
   rizz: { name: '리즈왕', skin: 0xf2c6a0, shirt: 0xff3d9a },
-  boss: { name: '부장님', skin: 0xeab98f, shirt: 0xf4f4f4 },
+  chill: { name: '칠가이', skin: 0xb98d62, shirt: 0x8b9099 },
 };
 export const SKIN_IDS = Object.keys(SKINS);
 

@@ -33,7 +33,7 @@ export class Player {
     this.ultraTick = 0;
     this.charmUntil = 0;
     this.charmBy = null;
-    this.stunUntil = 0;
+    this.slowUntil = 0;
     this.lastHitBy = null;
     this.lastHitAt = 0;
     this.lastShot = {};

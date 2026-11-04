@@ -39,4 +39,4 @@ const LINES = {
 
 export const lines = (name) => LINES[getLang()][name];
 
-export const SKIN_FACE = { minsu: '😐', sigma: '🗿', cat: '😼', cone: '🛸', toilet: '🚽', shark: '🦈', tung: '🪵', croc: '🐊', rizz: '😏', boss: '👔' };
+export const SKIN_FACE = { minsu: '😐', sigma: '🗿', cat: '😼', cone: '🛸', toilet: '🚽', streamer: '🎙️', tung: '🪵', hero: '🦸', rizz: '😏', chill: '🐕' };

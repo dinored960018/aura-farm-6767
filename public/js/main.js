@@ -184,7 +184,8 @@ H.teleport = (m) => inMatch && game.onTeleport(m);
 H.cat = (m) => inMatch && game.onCat(m);
 H.wave = (m) => inMatch && game.onWave(m);
 H.charm = (m) => inMatch && game.onCharm(m);
-H.stun = (m) => inMatch && game.onStun(m);
+H.bark = (m) => inMatch && game.onBark(m);
+H.slow = (m) => inMatch && game.onSlow(m);
 H.nuke = (m) => inMatch && game.onNuke(m);
 H.nukeBoom = (m) => inMatch && game.onNukeBoom(m);
 H.matchEnd = (m) => {

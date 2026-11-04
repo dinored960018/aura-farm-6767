@@ -408,59 +408,76 @@ async function ultraRoom(skin) {
   return { ...started, a, b, ap, bp };
 }
 
-test('각성: 상어는 닿으면 물어뜯고, 사후르는 충격파를 날린다', async () => {
-  const s = await ultraRoom('shark');
-  const bite = s.b.wait((m) => m.t === 'hit' && m.weapon === 'shark');
+test('각성: 스트리머는 앞쪽만 날리고, 사후르는 사방으로 충격파를 날린다', async () => {
+  const s = await ultraRoom('streamer');
+  // a는 +z(상대 쪽)를 본다: yaw PI면 앞이 +z
+  s.a.send({ t: 'state', p: s.ap, y: Math.PI, pi: 0, w: 'fart', e: 0 });
+  await sleep(40);
+  const bark = s.b.wait((m) => m.t === 'bark');
+  const hit = s.b.wait((m) => m.t === 'hit' && m.weapon === 'bark');
+  const knock = s.b.wait((m) => m.t === 'knock');
   s.a.send({ t: 'ultra' });
-  assert.equal((await bite).dmg, 22);
+  await bark;
+  assert.equal((await hit).dmg, 24);
+  assert.ok((await knock).v[2] > 0);
   await s.close();
+
+  const back = await ultraRoom('streamer');
+  back.a.send({ t: 'state', p: back.ap, y: 0, pi: 0, w: 'fart', e: 0 }); // 등지고 있음
+  await sleep(40);
+  back.a.send({ t: 'ultra' });
+  await sleep(250);
+  assert.equal(playerOf(back.b).hp, 100, '등 뒤는 안 맞음');
+  await back.close();
+
   const t = await ultraRoom('tung');
   const wave = t.b.wait((m) => m.t === 'wave');
-  const hit = t.b.wait((m) => m.t === 'hit' && m.weapon === 'tung');
-  const knock = t.b.wait((m) => m.t === 'knock');
+  const hit2 = t.b.wait((m) => m.t === 'hit' && m.weapon === 'tung');
   t.a.send({ t: 'ultra' });
   await wave;
-  assert.equal((await hit).dmg, 17);
-  assert.ok((await knock).v[2] > 0, '바깥으로 밀려남');
+  assert.equal((await hit2).dmg, 17);
   await t.close();
 });
 
-test('각성: 악어 폭격은 13발이고 쏜 사람은 안 맞는다', async () => {
-  const s = await ultraRoom('croc');
-  const before = s.b.msgs.length;
-  const hit = s.b.wait((m) => m.t === 'hit' && m.weapon === 'bomb', 8000);
-  s.a.send({ t: 'ultra' });
-  const h = await hit;
-  assert.equal(h.from, s.a.id);
-  assert.equal(s.b.msgs.slice(before).filter((m) => m.t === 'bomb').length, 13);
-  assert.equal(playerOf(s.a).hp, 100);
-  await s.close();
+test('각성: 히어로는 벽 뚫고 날아가 치고 그 자리에 착지한다', async () => {
+  const { cs: [a, b, c], close } = await startRoom(3, { skins: ['hero', 'minsu', 'minsu'] });
+  const ap = [-20, 0, 12], bp = [-20, 0, 18], cp = [20, 0, -12];
+  a.send({ t: 'state', p: ap, y: 0, pi: 0, w: 'fart', e: 0 });
+  b.send({ t: 'state', p: bp, y: 0, pi: 0, w: 'fart', e: 0 });
+  c.send({ t: 'state', p: cp, y: 0, pi: 0, w: 'fart', e: 0 });
+  await sleep(60);
+  playerOf(a).aura = 6767;
+  const hitB = a.wait((m) => m.t === 'hit' && m.weapon === 'hero' && m.to === b.id);
+  const hitC = a.wait((m) => m.t === 'hit' && m.weapon === 'hero' && m.to === c.id);
+  const off = a.wait((m) => m.t === 'ultra' && !m.on);
+  const tele = a.wait((m) => m.t === 'teleport');
+  a.send({ t: 'ultra' });
+  assert.equal((await hitB).dmg, 45);
+  assert.equal((await hitC).dmg, 45, '다음 상대도 친다');
+  await off;
+  assert.deepEqual((await tele).pos, cp, '마지막 상대 자리에 착지');
+  await close();
 });
 
-test('각성: 리즈에 반하면 공격이 막히고, 부장님은 전원을 소환해 차렷시킨다', async () => {
-  const s = await ultraRoom('rizz');
-  const charm = s.b.wait((m) => m.t === 'charm' && m.to === s.b.id);
+test('각성: 칠가이는 안 맞고 주변을 느리게 하며, 리즈에 반하면 공격이 막힌다', async () => {
+  const s = await ultraRoom('chill');
+  const slow = s.b.wait((m) => m.t === 'slow' && m.to === s.b.id);
   s.a.send({ t: 'ultra' });
-  await charm;
+  await slow;
   const { o, d } = aimAt(s.bp, s.ap);
   s.b.send({ t: 'shoot', w: 'six7', o, dirs: [d] });
   await sleep(50);
-  assert.equal(playerOf(s.a).hp, 100, '반하면 못 쏨');
+  assert.equal(playerOf(s.a).hp, 100, '칠가이는 무적');
   await s.close();
 
-  const t = await ultraRoom('boss');
-  t.a.send({ t: 'state', p: [-22, 0, 11], y: 0, pi: 0, w: 'fart', e: 0 });
+  const r = await ultraRoom('rizz');
+  const charm = r.b.wait((m) => m.t === 'charm' && m.to === r.b.id);
+  r.a.send({ t: 'ultra' });
+  await charm;
+  r.b.send({ t: 'shoot', w: 'six7', o, dirs: [d] });
   await sleep(50);
-  const tele = t.b.wait((m) => m.t === 'teleport');
-  const stun = t.b.wait((m) => m.t === 'stun');
-  t.a.send({ t: 'ultra' });
-  assert.deepEqual((await tele).pos, [-22, 0, 11]);
-  await stun;
-  t.b.send({ t: 'shoot', w: 'six7', o: [-22, 1.55, 11], dirs: [[1, 0, 0]] });
-  t.b.send({ t: 'slap', d: [1, 0, 0] });
-  await sleep(50);
-  assert.equal(playerOf(t.a).hp, 100, '차렷 중엔 공격 불가');
-  await t.close();
+  assert.equal(playerOf(r.a).hp, 100, '반하면 못 쏨');
+  await r.close();
 });
 
 for (const id of MAP_IDS) {
