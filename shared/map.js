@@ -252,7 +252,168 @@ const office = {
   },
 };
 
-export const MAPS = { ohio, roof, office };
+// ---------- 4. 아우라 보트: 뱃머리에서 파밍하는 그 맵. 물에 빠지면 끝 ----------
+const boat = {
+  id: 'boat',
+  name: '아우라 보트',
+  emoji: '🚣',
+  desc: '배 세 척. 물에 빠지면 끝',
+  bounds: 31,
+  fallY: -8,
+  showcase: { pos: [0, 0, 4], r: 6.4 },
+  boxes: [
+    B(-4, -2, -30, 4, 0, 30, 'floor', { floor: true }),
+    ...rotAll([
+      B(14, -2, -26, 22, 0, 26, 'floor', { floor: true }),
+      B(4, -0.5, -2, 14, 0, 2, 'bridge'),
+      B(4, -0.5, 14, 14, 0, 18, 'bridge'),
+      B(-2, 0, -22, 2, 3, -14, 'wall'),
+      ...stairs(0, -8.5, -1, 6, 4, 'step'),
+      B(16, 0, 6, 20, 1.6, 9, 'crate'),
+      B(15, 0, -20, 18, 2.2, -17, 'crate'),
+      B(20, 0, -4, 22, 2.5, 2, 'wall'),
+    ], TWO),
+  ],
+  decor: [],
+  pads: rotPads([{ pos: [18, 0, -23], radius: 1, power: 14, push: [-16, 0, 0] }], TWO),
+  spawns: spawnsFrom([[-18, 0, -20], [18, 0, 20], [-18, 0, 8], [18, 0, -8], [0, 0, 26], [0, 0, -26]]),
+  pickups: [
+    ...rotPoints([[18, 0.5, 13], [0, 3.5, -18]], TWO).map((pos, i) => ({ kind: i % 2 ? 'orb' : 'chicken', pos })),
+  ],
+  theme: {
+    sky: [[0, '#2a8bd8'], [0.48, '#a8e0ff'], [0.54, '#fff3c4'], [0.6, '#1d7fa8'], [1, '#0a3a5c']],
+    fog: [0xa8d8ee, 60, 200],
+    hemi: [0xffffff, 0x4a8a9c, 2.4],
+    sun: 1.6,
+    tex: {
+      floor: { base: '#a8703c', line: '#8a5a2c', checker: true, label: '67' },
+      wall: { base: '#f4f4f0', line: '#c44a3a' },
+      crate: { base: '#ffc233', line: '#b57a00' },
+      plat: { base: '#2ad3d7', line: '#07898c' },
+      step: { base: '#c98a50', line: '#8a5a2c' },
+      bridge: { base: '#d9b078', line: '#8a5a2c' },
+    },
+    signs: [
+      [['AURA', 'FARMING'], '#000', '#ffd700', [0, 11, -34], 0, 22],
+      [['뱃머리', '명당'], '#fff', '#0a5c9c', [0, 11, 34], Math.PI, 22],
+      [['물 조심'], '#0a3a5c', '#fff', [-30, 9, 0], Math.PI / 2, 18],
+      [['수영', '금지'], '#c00', '#fff', [30, 9, 0], -Math.PI / 2, 18],
+    ],
+    pit: { pos: [0, -5, 0], size: 260, lines: ['🌊 🌊 🌊'], bg: '#1a86b8', fg: '#7fd4f0' },
+    big67: [0, 18, 0],
+  },
+};
+
+// ---------- 5. 거대 화장실: 칸막이와 대왕 변기 ----------
+const restroom = {
+  id: 'restroom',
+  name: '거대 화장실',
+  emoji: '🚻',
+  desc: '칸막이 사이 숨바꼭질 + 대왕 변기',
+  bounds: 27,
+  fallY: -25,
+  showcase: { pos: [0, 0, 0], r: 6 },
+  boxes: [
+    B(-26, -1, -26, 26, 0, 26, 'floor', { floor: true }),
+    ...rotAll([
+      B(-27, -1, -27, 27, 10, -26, 'wall', { wall: true }),
+      B(-20, 0, -26, -19, 4, -18, 'step'),
+      B(-14, 0, -26, -13, 4, -18, 'step'),
+      B(-8, 0, -26, -7, 4, -18, 'step'),
+      B(10, 0, -4, 16, 2, 4, 'crate'),
+      B(16, 0, -5, 19, 6, 5, 'plat'),
+    ], FOUR),
+  ],
+  decor: [],
+  pads: rotPads([{ pos: [13, 0, 7], radius: 1, power: 15, push: [0, 0, -3.5] }], FOUR),
+  spawns: spawnsFrom(rotPoints([[-11, 0, -21], [6, 0, -6]], FOUR)),
+  pickups: [
+    ...rotPoints([[-17, 0.5, -22]], FOUR).map((pos) => ({ kind: 'chicken', pos })),
+    { kind: 'orb', pos: [13, 2.8, 0] },
+    { kind: 'orb', pos: [-13, 2.8, 0] },
+  ],
+  theme: {
+    sky: [[0, '#dfe9ee'], [1, '#aebfc8']],
+    fog: [0xd5e2e8, 40, 120],
+    hemi: [0xffffff, 0x8fa8b4, 2.5],
+    sun: 0.9,
+    tex: {
+      floor: { base: '#f4f6f7', line: '#d5dde2', checker: true, label: '67' },
+      wall: { base: '#bfe3ee', line: '#8fc0d0' },
+      crate: { base: '#ffffff', line: '#c8d2d8' },
+      plat: { base: '#f0f4f6', line: '#b8c4cc' },
+      step: { base: '#3f7fbf', line: '#2a5a8c' },
+      bridge: { base: '#46e063', line: '#1d8c34' },
+    },
+    signs: [
+      [['손 씻으세요'], '#fff', '#07f', [0, 7, -25.97], 0, 16],
+      [['SKIBIDI', '금지'], '#fff', '#d00', [0, 7, 25.97], Math.PI, 16],
+      [['휴지', '없음'], '#222', '#fff', [-25.97, 7, 0], Math.PI / 2, 14],
+      [['물 내려', '주세요'], '#ffe', '#040', [25.97, 7, 0], -Math.PI / 2, 14],
+    ],
+    pit: null,
+    big67: [0, 14, 0],
+  },
+};
+
+// ---------- 6. 67 콜로세움: 가운데 피라미드와 2층 관중석 ----------
+const pyramid = [];
+for (let i = 0; i < 8; i++) {
+  const h = 9 - i;
+  pyramid.push(B(-h, 0.5 * i, -h, h, 0.5 * (i + 1), h, 'step'));
+}
+const arena = {
+  id: 'arena',
+  name: '67 콜로세움',
+  emoji: '🏟️',
+  desc: '기둥 숲, 피라미드, 2층 관중석',
+  bounds: 31,
+  fallY: -25,
+  showcase: { pos: [0, 0, 20], r: 6 },
+  boxes: [
+    B(-30, -2, -30, 30, 0, 30, 'floor', { floor: true }),
+    ...pyramid,
+    ...rotAll([
+      B(-31, -2, -31, 31, 10, -30, 'wall', { wall: true }),
+      B(-30, 4, -30, 30, 4.6, -24, 'plat'),
+      ...stairs(-20, -15.5, -1, 9, 4, 'bridge', 4.6 / 9),
+      B(-23, 0, -9, -20, 8, -6, 'wall'),
+      B(-14, 0, -14, -11, 8, -11, 'wall'),
+      B(-7, 0, -17, -3, 1.4, -14, 'crate'),
+    ], FOUR),
+  ],
+  decor: [],
+  pads: rotPads([{ pos: [-20, 0, 0], radius: 1, power: 20, push: [12.5, 0, 0] }], FOUR),
+  spawns: spawnsFrom(rotPoints([[-12, 0, -21], [-26, 0, -3]], FOUR)),
+  pickups: [
+    ...rotPoints([[-27, 5, 0]], FOUR).map((pos) => ({ kind: 'chicken', pos })),
+    { kind: 'orb', pos: [0, 4.8, 0] },
+  ],
+  theme: {
+    sky: [[0, '#3f8fe0'], [0.5, '#bfe4ff'], [0.56, '#ffe9b0'], [1, '#c9a26a']],
+    fog: [0xe8d4a8, 55, 170],
+    hemi: [0xfff4dc, 0x9c7a4a, 2.3],
+    sun: 1.7,
+    tex: {
+      floor: { base: '#d9bd85', line: '#cdb077', checker: true, label: '67' },
+      wall: { base: '#efe3c8', line: '#b8a57f' },
+      crate: { base: '#a8703c', line: '#70471f' },
+      plat: { base: '#c9b48a', line: '#8f7c58' },
+      step: { base: '#e0a848', line: '#a8741f' },
+      bridge: { base: '#d9cfae', line: '#9c9070' },
+    },
+    signs: [
+      [['ARE YOU', 'NOT AURA?'], '#5c0a0a', '#ffd700', [0, 8, -29.97], 0, 20],
+      [['6-7', 'GLADIATOR'], '#000', '#fff', [0, 8, 29.97], Math.PI, 20],
+      [['SIGMA', 'IMPERATOR'], '#2a0a5c', '#ffd700', [-29.97, 8, 0], Math.PI / 2, 18],
+      [['검투사', '모집'], '#fff', '#900', [29.97, 8, 0], -Math.PI / 2, 18],
+    ],
+    pit: null,
+    big67: [0, 16, 0],
+  },
+};
+
+export const MAPS = { ohio, roof, office, boat, restroom, arena };
 export const MAP_IDS = Object.keys(MAPS);
 export const DEFAULT_MAP = 'ohio';
 

@@ -1,6 +1,7 @@
 // 경기 화면 위 DOM 연출 전부. 이름 같은 값은 textContent로만 넣는다.
-import { AURA_MAX, WEAPONS, ULTRAS } from '../shared/constants.js';
-import { WEAPON_LABEL, pick } from './memes.js';
+import { AURA_MAX, WEAPONS } from '../shared/constants.js';
+import { t } from './i18n.js';
+import { lines, pick } from './memes.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -15,7 +16,7 @@ export class Hud {
       vignette: $('vignette'), lock: $('lockHint'), cut: $('killCut'), cutText: $('killCutText'), death: $('death'),
       deathLine: $('deathLine'), deathBy: $('deathBy'), deathBar: $('deathBar'), event: $('eventBanner'),
       ultra: $('ultraFrame'), ultraLabel: $('ultraLabel'), ultraReady: $('ultraReady'), claws: $('claws'), grab: $('grabFace'),
-      oppen: $('oppen'), oppenBy: $('oppenBy'), flash: $('nukeFlash'), rain: $('rain'), dir: $('damageDir'), six: $('sixSeven'),
+      charm: $('charmFx'), oppen: $('oppen'), oppenBy: $('oppenBy'), flash: $('nukeFlash'), rain: $('rain'), dir: $('damageDir'), six: $('sixSeven'),
     };
     this.prev = {};
   }
@@ -33,6 +34,7 @@ export class Hud {
     document.getElementById('hudGameLayer').hidden = false;
     this.setUltra(false);
     this.setGrabbed(false);
+    this.setCharm(0);
     this.el.oppen.hidden = true;
     this.el.chips.replaceChildren();
     this.show(true);
@@ -41,7 +43,7 @@ export class Hud {
   setLockHint(v) { this.el.lock.hidden = !v; }
 
   setWeapon(w) {
-    this.el.weapon.textContent = `${w.emoji} ${w.name}`;
+    this.el.weapon.textContent = `${w.emoji} ${t(`weapon.${w.id}`)}`;
     this.restart(this.el.weapon, 'wobble');
   }
 
@@ -64,7 +66,7 @@ export class Hud {
       this.prev.hp = hp;
       e.hpBar.style.width = `${hp}%`;
       e.hpBar.classList.toggle('low', hp <= 33.5);
-      e.hpText.textContent = `정신력 ${Math.ceil(hp * 10) / 10}`;
+      e.hpText.textContent = t('hud.sanity', { n: Math.ceil(hp * 10) / 10 });
     }
     if (this.prev.aura !== g.aura) {
       this.prev.aura = g.aura;
@@ -72,7 +74,7 @@ export class Hud {
       e.auraText.textContent = `AURA ${g.aura.toLocaleString()} / ${AURA_MAX.toLocaleString()}`;
       const full = g.aura >= AURA_MAX;
       e.ultraReady.hidden = !full;
-      if (full) e.ultraReady.textContent = `E 눌러서 ${ULTRAS[g.me?.skinId]?.name ?? '각성'}`;
+      if (full) e.ultraReady.textContent = t('hud.ultraReady', { name: t(`ultra.${g.me?.skinId}`) });
       e.auraBar.classList.toggle('full', full);
     }
     this.renderScores(g);
@@ -84,7 +86,7 @@ export class Hud {
     if (this.prev.rel !== rel) {
       this.prev.rel = rel;
       e.reload.hidden = !rel;
-      if (rel) e.reload.textContent = pick(['장전 중 ㅋㅋ', '잠깐만요', '콩콩콩', 'loading...', '총알 사러 감']);
+      if (rel) e.reload.textContent = pick(lines('reload'));
     }
     const hideCross = !!g.emote || !g.alive || g.forced;
     if (this.prev.hideCross !== hideCross) {
@@ -165,7 +167,7 @@ export class Hud {
     el.textContent = `${delta >= 0 ? '+' : ''}${delta.toLocaleString()} AURA`;
     if (reason) {
       const r = document.createElement('small');
-      r.textContent = reason;
+      r.textContent = t(`aura.${reason}`);
       el.append(r);
     }
     el.style.setProperty('--r', `${Math.random() * 14 - 7}deg`);
@@ -179,7 +181,7 @@ export class Hud {
     const a = document.createElement('b');
     a.textContent = killer;
     const w = document.createElement('span');
-    w.textContent = ` ${WEAPON_LABEL[m.weapon] ?? '❓'}${m.head ? ' 🎯' : ''} `;
+    w.textContent = ` ${t(`label.${m.weapon}`)}${m.head ? ' 🎯' : ''} `;
     const v = document.createElement('b');
     v.textContent = victim;
     row.append(a, w, v);
@@ -202,7 +204,7 @@ export class Hud {
     const e = this.el;
     e.death.hidden = false;
     e.deathLine.textContent = line;
-    e.deathBy.textContent = weapon === 'fall' ? '오하이오로 추락함' : `${killer}의 ${WEAPON_LABEL[weapon] ?? ''}에 눈깔 뽑힘`;
+    e.deathBy.textContent = weapon === 'fall' ? t('hud.deathFall') : t('hud.deathBy', { name: killer, weapon: t(`label.${weapon}`) });
     e.deathBar.style.transition = 'none';
     e.deathBar.style.width = '100%';
     void e.deathBar.offsetWidth;
@@ -238,9 +240,15 @@ export class Hud {
     if (!on) this.el.claws.replaceChildren();
   }
 
+  setCharm(ms) {
+    clearTimeout(this.charmTimer);
+    this.el.charm.hidden = !ms;
+    if (ms) this.charmTimer = setTimeout(() => { this.el.charm.hidden = true; }, ms);
+  }
+
   oppenheimer(ms, by) {
     const e = this.el;
-    e.oppenBy.textContent = by ? `${by}: 핵 쐈다. 벽 뒤로 숨어라` : '핵 발사. 넌 방사능 면역임';
+    e.oppenBy.textContent = by ? t('hud.nukeOther', { name: by }) : t('hud.nukeMine');
     e.oppen.hidden = false;
     clearTimeout(this.oppenTimer);
     this.oppenTimer = setTimeout(() => { e.oppen.hidden = true; }, ms);

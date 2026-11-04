@@ -174,6 +174,19 @@ export class Effects {
     }).userData.dispose = () => { geo.dispose(); mat.dispose(); };
   }
 
+  // 퍼져 나가는 충격파
+  ring(pos, radius, color = 0xffc233) {
+    const geo = new THREE.TorusGeometry(1, 0.12, 6, 40).rotateX(Math.PI / 2);
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(pos[0], pos[1] + 0.5, pos[2]);
+    this.add(m, 0.4, (it) => {
+      const k = 1 - it.life / it.max;
+      m.scale.set(0.5 + k * radius, 1 + k * 2, 0.5 + k * radius);
+      mat.opacity = 1 - k;
+    }).userData.dispose = () => { geo.dispose(); mat.dispose(); };
+  }
+
   // 버섯구름
   mushroom(pos, radius) {
     const [x, y, z] = pos;

@@ -1,7 +1,7 @@
 // 방 하나 = 대기실 + 경기 1판 (개인전, 2~4명). 서버가 체력·킬·아우라·판정을 전부 결정한다.
 import {
   TICK_HZ, MAX_HP, WIN_KILLS, MATCH_SECONDS, AURA_MAX, INTERP_MS, MAX_PLAYERS,
-  WEAPONS, LASER, SLAP, AURA, CHICKEN_HEAL, BOMB, NUKE, CAT, FLUSH, ULTRAS, EVENTS, EVENT_IDS, PLAYER, DEFAULT_TIMINGS, SKIN_IDS,
+  WEAPONS, LASER, SLAP, AURA, CHICKEN_HEAL, BOMB, NUKE, CAT, FLUSH, SHARK, TUNG, RIZZ, BOSS, ULTRAS, EVENTS, EVENT_IDS, PLAYER, DEFAULT_TIMINGS, SKIN_IDS,
 } from '../shared/constants.js';
 import { MAPS, MAP_IDS, DEFAULT_MAP, pickSpawn, rayWorld, rayPlayer, groundAt } from '../shared/map.js';
 import { Bot } from './bot.js';
@@ -9,7 +9,7 @@ import { Bot } from './bot.js';
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 const validVec = (v) => Array.isArray(v) && v.length === 3 && v.every(finite);
 const round = (n) => Math.round(n * 100) / 100;
-const BOT_NAMES = ['AI 민수', '연습용 NPC', '봇치더락', '오하이오 봇', '월급루팡 봇', '스킬이슈 봇', '인턴 봇'];
+const BOT_NAMES = ['AI Minsu', 'Practice NPC', 'Bot Rocks', 'Ohio Bot', 'Payroll Bot', 'Skill Issue', 'Intern Bot'];
 const CREDIT_MS = 8000;
 
 export class Room {
@@ -83,17 +83,17 @@ export class Room {
     }
     if (this.state === 'countdown' || this.state === 'playing') {
       if (this.players.length >= 2) {
-        this.broadcast({ t: 'chat', from: '시스템', text: `${player.name} 도망침 ㅋㅋ` });
+        this.broadcast({ t: 'sys', key: 'sys.fled', vars: { name: player.name } });
         this.sendRoom();
       } else {
         this.endMatch(this.players[0], 'ragequit');
       }
     } else if (this.state === 'results') {
-      this.broadcast({ t: 'chat', from: '시스템', text: `${player.name} 도망침 ㅋㅋ` });
+      this.broadcast({ t: 'sys', key: 'sys.fled', vars: { name: player.name } });
       this.sendRoom();
     } else {
       this.players.forEach((p) => { p.ready = p.isBot; });
-      this.broadcast({ t: 'chat', from: '시스템', text: `${player.name} 나감. 쫄?` });
+      this.broadcast({ t: 'sys', key: 'sys.left', vars: { name: player.name } });
       this.sendRoom();
     }
   }
@@ -136,8 +136,7 @@ export class Room {
     if (this.state !== 'lobby' || (id !== 'random' && !MAP_IDS.includes(id)) || this.mapChoice === id) return;
     this.mapChoice = id;
     if (id !== 'random') this.map = MAPS[id];
-    const label = id === 'random' ? '랜덤' : MAPS[id].name;
-    this.broadcast({ t: 'chat', from: '시스템', text: `${player.name}: 맵을 ${label}(으)로 바꿈` });
+    this.broadcast({ t: 'sys', key: 'sys.map', vars: { name: player.name }, mapId: id });
     this.sendRoom();
   }
 
@@ -145,7 +144,7 @@ export class Room {
     if (this.state !== 'lobby' || player.name === name) return;
     const old = player.name;
     player.name = name;
-    this.broadcast({ t: 'chat', from: '시스템', text: `${old} → ${name} 닉변함` });
+    this.broadcast({ t: 'sys', key: 'sys.rename', vars: { old, name } });
     this.sendRoom();
   }
 
@@ -202,6 +201,9 @@ export class Room {
     p.invulnUntil = Date.now() + this.t.invulnMs;
     p.emote = 0;
     p.lastHitBy = null;
+    p.charmUntil = 0;
+    p.charmBy = null;
+    p.stunUntil = 0;
     if (p.isBot) p.onSpawn();
   }
 
@@ -247,6 +249,8 @@ export class Room {
       if (this.state !== 'playing') return;
       if (p.flush && p.alive) this.tickFlush(p, now);
       if (this.state !== 'playing') return;
+      if (p.alive && (p.ultraKind === 'shark' || p.ultraKind === 'tung')) this.tickContact(p, now);
+      if (this.state !== 'playing') return;
       if (p.alive && p.emote === 1 && now - p.movedAt > 150) {
         this.addAura(p, AURA.farmPerSec * dt, null);
       }
@@ -288,9 +292,9 @@ export class Room {
     if (kind === 'dogfight') this.scheduleAirstrike(now);
   }
 
-  scheduleAirstrike(now) {
-    // 6발 + 7발. 사람들을 노리고, 나머지는 아무 데나.
-    const targets = this.players.filter((p) => p.alive);
+  scheduleAirstrike(now, owner = null) {
+    // 6발 + 7발. 사람들을 노리고, 나머지는 아무 데나. owner가 있으면 그 사람은 빼고 노린다.
+    const targets = this.players.filter((p) => p.alive && p !== owner);
     const lim = this.map.bounds - 2;
     for (let i = 0; i < 13; i++) {
       const anchor = targets.length && Math.random() < 0.7 ? targets[i % targets.length].pos : this.map.showcase.pos;
@@ -299,7 +303,7 @@ export class Room {
       const g = groundAt(this.map, x, z, anchor[1] + 1);
       const y = g > -50 ? g : anchor[1];
       const at = now + BOMB.fuseMs + (i < 6 ? i * 280 : 2000 + (i - 6) * 280);
-      this.bombs.push({ pos: [x, y, z], at });
+      this.bombs.push({ pos: [x, y, z], at, owner });
       this.broadcast({ t: 'bomb', pos: [round(x), round(y), round(z)], in: at - now });
     }
   }
@@ -311,14 +315,15 @@ export class Room {
     for (const b of due) {
       this.broadcast({ t: 'boom', pos: b.pos });
       for (const p of [...this.players]) {
-        if (!p.alive) continue;
+        if (!p.alive || p === b.owner) continue;
         const dx = p.pos[0] - b.pos[0], dy = p.pos[1] + 0.9 - b.pos[1], dz = p.pos[2] - b.pos[2];
         const d = Math.hypot(dx, dy, dz);
         if (d >= BOMB.radius) continue;
         const k = 1 - d / BOMB.radius;
         const l = d || 1;
         this.knock(p, [dx / l * BOMB.knock * k, 8 * k + 3, dz / l * BOMB.knock * k]);
-        this.damage(p, this.creditFor(p, now), BOMB.damage * k, { weapon: 'bomb', head: false, env: true, pos: p.pos });
+        const credit = b.owner && this.players.includes(b.owner) ? b.owner : this.creditFor(p, now);
+        this.damage(p, credit, BOMB.damage * k, { weapon: 'bomb', head: false, env: true, pos: p.pos });
         if (this.state !== 'playing') return;
       }
     }
@@ -341,6 +346,23 @@ export class Room {
       p.flush = { nextTick: now };
     } else if (kind === 'cone') {
       this.launchNuke(p, now);
+    } else if (kind === 'croc') {
+      this.scheduleAirstrike(now, p);
+    } else if (kind === 'rizz') {
+      for (const q of this.others(p)) {
+        if (!q.alive || Math.hypot(q.pos[0] - p.pos[0], q.pos[2] - p.pos[2]) > RIZZ.radius) continue;
+        q.charmUntil = now + def.ms;
+        q.charmBy = p;
+        this.broadcast({ t: 'charm', id: p.id, to: q.id, ms: def.ms });
+      }
+    } else if (kind === 'boss') {
+      // 전원 집합: 내 자리로 순간이동 후 차렷
+      for (const q of this.others(p)) {
+        if (!q.alive || q.cat) continue;
+        q.teleport(p.pos);
+        q.stunUntil = now + BOSS.stunMs;
+        this.broadcast({ t: 'stun', id: p.id, to: q.id, ms: BOSS.stunMs });
+      }
     }
   }
 
@@ -404,6 +426,27 @@ export class Room {
     }
     p.movedAt = now;
     p.pushHistory(now);
+  }
+
+  disabled(p, now) { return now < p.stunUntil || now < p.charmUntil; }
+
+  // 상어: 닿으면 물림. 사후르: 일정 간격 충격파.
+  tickContact(p, now) {
+    if (now < p.ultraTick) return;
+    const tung = p.ultraKind === 'tung';
+    const def = tung ? TUNG : SHARK;
+    p.ultraTick = now + def.tickMs;
+    if (tung) this.broadcast({ t: 'wave', id: p.id, pos: p.pos.map(round), radius: TUNG.radius });
+    const reach = tung ? TUNG.radius : SHARK.range;
+    for (const q of this.others(p)) {
+      if (!q.alive || now < q.invulnUntil) continue;
+      const dx = q.pos[0] - p.pos[0], dz = q.pos[2] - p.pos[2];
+      const d = Math.hypot(dx, dz) || 1;
+      if (d > reach || Math.abs(q.pos[1] - p.pos[1]) > (tung ? 6 : 2.5)) continue;
+      this.knock(q, [dx / d * def.knock, 9, dz / d * def.knock]);
+      this.damage(q, p, def.damage, { weapon: p.ultraKind, head: false, env: true, pos: q.pos });
+      if (this.state !== 'playing') return;
+    }
   }
 
   // 변기맨: 주변을 빨아들이고, 코앞까지 오면 물에 갈린다.
@@ -482,7 +525,7 @@ export class Room {
     const em = !p.cat && (msg.e === 1 || msg.e === 2) ? msg.e : 0;
     if (em === 2 && p.emote !== 2 && now - p.lastSixSeven > 2000) {
       p.lastSixSeven = now;
-      this.addAura(p, AURA.sixSeven, '6-7');
+      this.addAura(p, AURA.sixSeven, 'sixSeven');
     }
     p.emote = em;
     if (!p.cat) p.pushHistory(now);
@@ -498,13 +541,13 @@ export class Room {
       pk.active = false;
       pk.respawnAt = now + this.t.pickupRespawnMs;
       if (pk.kind === 'chicken') p.hp = Math.min(MAX_HP, p.hp + CHICKEN_HEAL);
-      else this.addAura(p, AURA.orb, '아우라 결정 획득');
+      else this.addAura(p, AURA.orb, 'orb');
       this.broadcast({ t: 'pickup', i, active: false, by: p.id, kind: pk.kind });
     }
   }
 
   onShoot(p, msg) {
-    if (!this.isPlaying() || !p.alive || p.cat) return;
+    if (!this.isPlaying() || !p.alive || p.cat || this.disabled(p, Date.now())) return;
     const w = msg.w === LASER.id ? (p.ultraKind === 'minsu' ? LASER : null) : WEAPONS[msg.w];
     if (!w || !validVec(msg.o) || !Array.isArray(msg.dirs) || msg.dirs.length === 0 || msg.dirs.length > w.pellets) return;
     const now = Date.now();
@@ -559,6 +602,7 @@ export class Room {
   onSlap(p, msg) {
     if (!this.isPlaying() || !p.alive || p.cat || !validVec(msg.d)) return;
     const now = Date.now();
+    if (this.disabled(p, now)) return;
     if (now - p.lastSlap < SLAP.cooldown * 1000 * 0.8) return;
     p.lastSlap = now;
     this.broadcast({ t: 'slapFx', id: p.id });
@@ -620,9 +664,9 @@ export class Room {
         target.lastHitBy = attacker;
         target.lastHitAt = now;
       }
-      if (!info.env) this.addAura(attacker, info.head ? AURA.hitHead : AURA.hitBody, info.head ? '헤드샷' : null);
+      if (!info.env) this.addAura(attacker, info.head ? AURA.hitHead : AURA.hitBody, info.head ? 'head' : null);
     }
-    if (target.emote === 1) this.addAura(target, AURA.farmInterrupted, '파밍 중 처맞음');
+    if (target.emote === 1) this.addAura(target, AURA.farmInterrupted, 'farmHit');
     const dead = target.hp <= 0;
     this.broadcast({
       t: 'hit', to: target.id, from: attacker?.id ?? null, dmg, head: !!info.head, weapon: info.weapon,
@@ -641,12 +685,12 @@ export class Room {
     victim.respawnAt = now + this.t.respawnMs;
     victim.stats.deaths++;
     const self = info.weapon === 'fall';
-    this.addAura(victim, self ? AURA.fell : AURA.death, self ? '오하이오 추락' : '사망');
+    this.addAura(victim, self ? AURA.fell : AURA.death, self ? 'fall' : 'death');
     if (killer) {
       killer.kills++;
       killer.stats.streak++;
       if (killer.stats.streak > killer.stats.bestStreak) killer.stats.bestStreak = killer.stats.streak;
-      if (!self && info.weapon !== 'bomb') this.addAura(killer, AURA.kill, '킬');
+      if (!self && info.weapon !== 'bomb') this.addAura(killer, AURA.kill, 'kill');
     }
     victim.stats.streak = 0;
     this.broadcast({

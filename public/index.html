@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -17,17 +17,18 @@
   <div id="ultraFrame" hidden><span id="ultraLabel">SIGMA MODE</span></div>
   <div id="claws"></div>
   <div id="grabFace" hidden>😼</div>
+  <div id="charmFx" hidden>💖</div>
   <div id="nukeFlash"></div>
   <div id="oppen" hidden>
     <div class="bar-top"></div>
     <div class="bar-bottom">
-      <p>이제 나는 죽음이요, 세계의 파괴자가 되었다</p>
+      <p data-i18n="hud.quote"></p>
       <small id="oppenBy"></small>
     </div>
   </div>
   <div id="hudGameLayer">
     <div id="scoreBox">
-      <div id="timerBox"><small>먼저 7킬</small><i id="timer">6:07</i></div>
+      <div id="timerBox"><small data-i18n="hud.first7"></small><i id="timer">6:07</i></div>
       <div id="scoreChips"></div>
     </div>
     <div id="killfeed"></div>
@@ -44,22 +45,22 @@
     <div id="bigEyes"><div class="bigeye l"><u></u></div><div class="bigeye r"><u></u></div></div>
 
     <div id="vitals">
-      <div class="bar hp"><div id="hpBar"></div><span id="hpText">정신력 100</span></div>
+      <div class="bar hp"><div id="hpBar"></div><span id="hpText"></span></div>
       <div class="bar aura"><div id="auraBar"></div><span id="auraText">AURA 0 / 6,767</span></div>
-      <div id="ultraReady" hidden>E 눌러서 시그마 각성</div>
+      <div id="ultraReady" hidden></div>
     </div>
     <div id="weaponBox">
       <div id="reloadText" hidden></div>
-      <div id="weaponName">💨 방귀 기관총</div>
+      <div id="weaponName"></div>
       <div id="ammo">67 / 67</div>
     </div>
     <div id="keys">
-      <span><kbd>G</kbd> 꾹: 아우라 파밍</span>
-      <span><kbd>T</kbd> 꾹: 6-7</span>
-      <span><kbd>F</kbd> 싸대기</span>
-      <span><kbd>Shift</kbd> 대시</span>
-      <span><kbd>Space</kbd>×2 이단점프</span>
-      <span><kbd>1 2 3</kbd> 무기</span>
+      <span data-i18n-html="keys.g"></span>
+      <span data-i18n-html="keys.t"></span>
+      <span data-i18n-html="keys.f"></span>
+      <span data-i18n-html="keys.shift"></span>
+      <span data-i18n-html="keys.space"></span>
+      <span data-i18n-html="keys.num"></span>
     </div>
     <div id="ticker"></div>
 
@@ -70,13 +71,13 @@
     </div>
 
     <div id="death" hidden>
-      <h2 id="deathLine">스킬 이슈</h2>
+      <h2 id="deathLine"></h2>
       <p id="deathBy"></p>
       <div class="respawn"><div id="deathBar"></div></div>
-      <small>부활 중... 그동안 상대 아우라 감상하셈</small>
+      <small data-i18n="hud.respawn"></small>
     </div>
 
-    <div id="lockHint" hidden><b>클릭해서 참전</b><small>Esc 누르면 마우스 풀림</small></div>
+    <div id="lockHint" hidden><b data-i18n="hud.lock"></b><small data-i18n="hud.lockSub"></small></div>
   </div>
   <div id="rain"></div>
 </div>
@@ -85,23 +86,24 @@
 <section id="home" class="panelScreen" hidden>
   <header class="logo">
     <h1><span>AURA FARM</span><em>6767</em></h1>
-    <p>최대 4인 눈깔 적출 FPS</p>
+    <p data-i18n="home.tagline"></p>
   </header>
   <div class="card">
-    <label>닉네임<input id="nameInput" maxlength="12" placeholder="익명의 NPC" autocomplete="off"></label>
+    <label><span data-i18n="home.nickname"></span><input id="nameInput" maxlength="12" data-i18n-ph="home.nickPh" autocomplete="off"></label>
     <div class="row">
-      <input id="roomNameInput" maxlength="20" placeholder="방 이름 (대충)" autocomplete="off">
-      <button id="createBtn" class="primary">방 만들기</button>
+      <input id="roomNameInput" maxlength="20" data-i18n-ph="home.roomPh" autocomplete="off">
+      <button id="createBtn" class="primary" data-i18n="home.create"></button>
     </div>
     <form id="joinRow" class="row" hidden>
-      <input id="joinInput" maxlength="8" placeholder="친구한테 받은 초대 코드" autocomplete="off">
-      <button class="ghost">코드로 참가</button>
+      <input id="joinInput" maxlength="8" data-i18n-ph="home.joinPh" autocomplete="off">
+      <button class="ghost" data-i18n="home.join"></button>
     </form>
-    <h2>열린 방</h2>
+    <h2 data-i18n="home.rooms"></h2>
     <div id="roomList"></div>
     <div class="foot">
-      <span id="connStatus">서버 찾는 중...</span>
+      <span id="connStatus" data-i18n="home.finding"></span>
       <span id="ping"></span>
+      <div id="langPick" role="group" aria-label="Language"><button type="button" data-lang="en">ENG</button><button type="button" data-lang="ko">KR</button></div>
       <label class="vol">🔊 <input id="volume" type="range" min="0" max="1" step="0.05" value="0.8"></label>
     </div>
   </div>
@@ -110,36 +112,36 @@
 <!-- 대기실 -->
 <section id="room" class="panelScreen roomLayout" hidden>
   <div class="card side">
-    <div class="titleRow"><h2 id="roomTitle">대기실</h2><button id="leaveBtn" class="ghost">나가기</button></div>
+    <div class="titleRow"><h2 id="roomTitle"></h2><button id="leaveBtn" class="ghost" data-i18n="room.leave"></button></div>
     <form id="renameForm" class="row">
-      <input id="renameInput" maxlength="12" placeholder="닉네임" autocomplete="off" aria-label="닉네임">
-      <button class="ghost">닉변</button>
+      <input id="renameInput" maxlength="12" data-i18n-ph="room.renamePh" autocomplete="off" aria-label="Nickname">
+      <button class="ghost" data-i18n="room.rename"></button>
     </form>
     <div id="slots"></div>
-    <button id="readyBtn" class="primary big">준비</button>
+    <button id="readyBtn" class="primary big"></button>
     <div class="row">
-      <button id="botBtn" class="ghost">🤖 봇+</button>
-      <button id="botOutBtn" class="ghost">봇−</button>
-      <button id="copyBtn" class="ghost" title="주소 복사">🔗 초대</button>
+      <button id="botBtn" class="ghost">🤖 Bot+</button>
+      <button id="botOutBtn" class="ghost">Bot−</button>
+      <button id="copyBtn" class="ghost" data-i18n="room.invite" data-i18n-title="room.inviteTitle"></button>
     </div>
-    <h3>맵</h3>
-    <div id="mapPick"></div>
-    <h3>내 캐릭터</h3>
-    <div id="skinPick"></div>
-    <p id="skinDesc"></p>
+    <h3 data-i18n="room.chat"></h3>
+    <div id="chatLog"></div>
+    <form id="chatForm" class="row"><input id="chatInput" maxlength="120" data-i18n-ph="room.chatPh" autocomplete="off"><button class="ghost" data-i18n="room.send"></button></form>
   </div>
   <div class="card side right">
-    <h3>채팅</h3>
-    <div id="chatLog"></div>
-    <form id="chatForm" class="row"><input id="chatInput" maxlength="120" placeholder="도발 한마디" autocomplete="off"><button class="ghost">전송</button></form>
-    <h3>조작</h3>
+    <h3 data-i18n="room.map"></h3>
+    <div id="mapPick"></div>
+    <h3 data-i18n="room.character"></h3>
+    <div id="skinPick"></div>
+    <p id="skinDesc"></p>
+    <h3 data-i18n="room.controls"></h3>
     <ul class="help">
-      <li><b>WASD</b> 이동 · <b>Space</b> 점프(2단) · <b>Shift</b> 대시</li>
-      <li><b>좌클릭</b> 발사 · <b>우클릭</b> 줌 · <b>R</b> 장전 · <b>1 2 3</b> 무기</li>
-      <li><b>F</b> 싸대기 (67 데미지, 날려버림)</li>
-      <li><b>G 꾹</b> 아우라 파밍 · <b>T 꾹</b> 6-7</li>
-      <li>아우라 6,767 채우고 <b>E</b> = 캐릭터별 각성</li>
-      <li>2~4명 개인전. 전원 준비하면 시작, 먼저 7킬</li>
+      <li data-i18n-html="help.1"></li>
+      <li data-i18n-html="help.2"></li>
+      <li data-i18n-html="help.3"></li>
+      <li data-i18n-html="help.4"></li>
+      <li data-i18n-html="help.5"></li>
+      <li data-i18n-html="help.6"></li>
     </ul>
   </div>
 </section>
@@ -147,7 +149,7 @@
 <!-- 결과 -->
 <section id="result" class="panelScreen" hidden>
   <div class="resultBox">
-    <div id="sixSevenBanner" hidden>6 : 7 SIX SEVEN 실화냐</div>
+    <div id="sixSevenBanner" hidden data-i18n="result.sixSeven"></div>
     <h1 id="resultTitle"></h1>
     <p id="resultSub"></p>
     <div id="resultStats"></div>

@@ -1,13 +1,14 @@
 // 3D 세계와 1인칭 조작. 서버 메시지를 받아 눈깔을 튀어나오게 한다.
 import * as THREE from 'three';
 import {
-  WEAPONS, LASER, ULTRAS, MOVE, PLAYER, SLAP, BOMB, EVENTS, AURA_MAX, INTERP_MS, MATCH_SECONDS, TICK_HZ,
+  WEAPONS, LASER, SHARK, MOVE, PLAYER, SLAP, BOMB, AURA_MAX, INTERP_MS, MATCH_SECONDS, TICK_HZ,
 } from '../shared/constants.js';
 import { MAPS, DEFAULT_MAP, rayWorld, rayPlayer } from '../shared/map.js';
 import { newBody, stepBodyFixed } from '../shared/physics.js';
 import { Character, glowTexture } from './character.js';
 import { Effects, textTexture } from './effects.js';
-import { KILL_LINES, DEATH_LINES, FALL_LINES, pick } from './memes.js';
+import { lines, pick } from './memes.js';
+import { t, ttsLang, signLines } from './i18n.js';
 
 const emptyAmmo = () => Object.fromEntries(Object.values(WEAPONS).map((w) => [w.id, w.mag]));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -165,6 +166,9 @@ export class Game {
     this.grabbedBy = null;
     this.musicHold = 0;
     this.cineUntil = 0;
+    this.charmUntil = 0;
+    this.charmBy = null;
+    this.stunUntil = 0;
     this.cinePos = null;
     this.aura = 0;
     this.hp = 100;
@@ -184,6 +188,12 @@ export class Game {
   }
 
   // ---------- 세계 ----------
+  reloadWorld() {
+    const id = this.mapId;
+    this.mapId = null;
+    this.loadMap(id);
+  }
+
   loadMap(id) {
     if (this.mapId === id && this.world) return;
     if (this.world) {
@@ -238,8 +248,8 @@ export class Game {
     }
     for (const b of map.decor) s.add(boxMesh(b, mats[b.kind], b.kind === 'city' ? 8 : 2));
 
-    for (const [lines, bg, fg, pos, rot, w] of th.signs) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 2), new THREE.MeshBasicMaterial({ map: own(bannerTexture(lines, bg, fg)), fog: false }));
+    for (const [signText, bg, fg, pos, rot, w] of th.signs) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 2), new THREE.MeshBasicMaterial({ map: own(bannerTexture(signLines(signText), bg, fg)), fog: false }));
       m.position.set(...pos);
       m.rotation.y = rot;
       s.add(m);
@@ -487,7 +497,7 @@ export class Game {
     }
     if (attract && players.length < 2) {
       if (!this.chars.has('ghost')) {
-        const c = new Character('cone', '상대 구함');
+        const c = new Character('cone', t('room.ghost'));
         this.scene.add(c.root);
         this.chars.set('ghost', c);
       }
@@ -540,7 +550,7 @@ export class Game {
     this.sfx.bong();
     this.cdTimers = [
       setTimeout(() => { this.hud.bigCount('7'); this.sfx.say('seven', { rate: 0.8, pitch: 0.4 }); this.sfx.bong(); }, step),
-      setTimeout(() => { this.hud.bigCount('쏴라!!'); this.sfx.airhorn(); }, step * 2),
+      setTimeout(() => { this.hud.bigCount(t('hud.go')); this.sfx.airhorn(); }, step * 2),
     ];
     this.sfx.stopMusic();
   }
@@ -663,7 +673,7 @@ export class Game {
     if (m.weapon === 'slap') this.sfx.slap();
     if (m.weapon === 'claw') {
       this.sfx.scratch();
-      this.effects.text([m.pos[0], m.pos[1] + 2.1, m.pos[2]], pick(['냥!', '할퀴기!', '💢', '🐾', '캬악']), { color: '#ff4d6d', scale: 0.9, life: 0.45 });
+      this.effects.text([m.pos[0], m.pos[1] + 2.1, m.pos[2]], pick(lines('claw')), { color: '#ff4d6d', scale: 0.9, life: 0.45 });
       if (Math.random() < 0.18) this.sfx.meow();
     }
     if (mine && m.weapon === 'claw') {
@@ -687,7 +697,7 @@ export class Game {
       const pos = [m.pos[0], m.pos[1] + (m.head ? 2.2 : 1.4), m.pos[2]];
       this.effects.text(pos, `-${m.dmg}`, { color: m.head ? '#ffdd00' : '#ffffff', scale: m.head ? 1.3 : 0.8, life: 0.8 });
       if (m.head) this.effects.text(pos, pick(['💀', '👁️', '🫨', '🤯']), { scale: 1.5, life: 0.8, spin: 3, stroke: null });
-      if (m.weapon === 'slap') this.effects.text(pos, '찰싹!!', { color: '#ff4d6d', scale: 1.6, life: 0.8 });
+      if (m.weapon === 'slap') this.effects.text(pos, t('fx.slap'), { color: '#ff4d6d', scale: 1.6, life: 0.8 });
     } else if (c && !mine && m.weapon !== 'claw') {
       this.sfx.bonk();
     }
@@ -709,21 +719,21 @@ export class Game {
       });
       victim.setVisibleBody(true);
       victim.die();
-      this.effects.text([m.pos[0], m.pos[1] + 2.6, m.pos[2]], pick(KILL_LINES), { color: '#ff2a6d', scale: 1.5, life: 1.8, rise: 1 });
+      this.effects.text([m.pos[0], m.pos[1] + 2.6, m.pos[2]], pick(lines('kill')), { color: '#ff2a6d', scale: 1.5, life: 1.8, rise: 1 });
       this.effects.cloud([m.pos[0], m.pos[1] + 1.2, m.pos[2]], 10, 0xff3355);
     }
-    const killerName = m.killer != null ? this.nameOf(m.killer) : m.weapon === 'bomb' ? '🐶 개 전투기' : '중력';
+    const killerName = m.killer != null ? this.nameOf(m.killer) : t(m.weapon === 'bomb' ? 'name.plane' : 'name.gravity');
     this.hud.killFeed(m, killerName, this.nameOf(m.victim));
 
     if (got) {
       if (iKilled) {
-        const line = pick(KILL_LINES);
+        const line = pick(lines('kill'));
         this.hud.killCutIn(line, m.head);
         this.sfx.vineBoom();
         setTimeout(() => this.sfx.airhorn(), 160);
         this.meme(line);
       } else {
-        this.hud.shout('공짜 킬 개꿀', 'gold');
+        this.hud.shout(t('shout.free'), 'gold');
       }
       this.hud.rain(['67', '67', '🗿', '👁️'], 12);
       if (m.killerKills === 6) { this.sfx.say('six', { pitch: 0.2, rate: 0.7 }); this.hud.shout('SIX...', 'gold'); }
@@ -740,18 +750,20 @@ export class Game {
       this.me?.setVisibleBody(true);
       if (this.me?.tag) this.me.tag.visible = false;
       this.ultraOff();
-      const line = pick(m.weapon === 'fall' ? FALL_LINES : DEATH_LINES);
+      const line = pick(lines(m.weapon === 'fall' ? 'fall' : 'death'));
       this.setGrabbed(null);
+      this.charmUntil = this.stunUntil = 0;
+      this.hud.setCharm(0);
       this.hud.deathScreen(line, killerName, m.weapon, m.respawnMs);
       this.sfx.sadTrombone();
       this.sfx.bigFart();
       this.meme(line, true);
-      if (m.victimKills === 6 && m.killerKills === 6) this.hud.shout('6:6 매치포인트', 'gold');
+      if (m.victimKills === 6 && m.killerKills === 6) this.hud.shout(t('shout.matchPoint'), 'gold');
     }
   }
 
   nameOf(id) {
-    return this.hud.names.get(id) ?? '나간 사람';
+    return this.hud.names.get(id) ?? t('name.left');
   }
 
   meme(text, force = false) {
@@ -792,7 +804,7 @@ export class Game {
     if (m.id === this.myId) {
       this.hud.auraPop(m.delta, m.reason);
       if (m.delta >= 600) this.sfx.sparkle();
-      if (m.delta <= -600 && m.reason !== '사망' && m.reason !== '오하이오 추락') {
+      if (m.delta <= -600 && m.reason !== 'death' && m.reason !== 'fall') {
         this.meme('cringe', true);
       }
     } else {
@@ -833,13 +845,47 @@ export class Game {
   onCat(m) {
     if (m.to === this.myId) {
       this.setGrabbed(m.id);
-      this.hud.shout('얼굴에 고양이 붙음!! F로 떼어내', 'red');
+      this.hud.shout(t('shout.cat'), 'red');
       this.sfx.meow();
-      this.sfx.say('냥', { lang: 'ko-KR', pitch: 2, rate: 1.4 });
+      this.sfx.say(t('tts.meow'), { lang: ttsLang(), pitch: 2, rate: 1.4 });
     } else if (m.to === null && this.grabbedBy === m.id) {
       this.setGrabbed(null);
     }
     if (m.id === this.myId && m.to !== null) this.sfx.meow();
+  }
+
+  onWave(m) {
+    this.effects.ring(m.pos, m.radius);
+    this.effects.text([m.pos[0], m.pos[1] + 3.4, m.pos[2]], t('fx.tung'), { color: '#ffc233', scale: 1.5, life: 0.5 });
+    this.sfx.tungTung();
+    const d = Math.hypot(this.body.x - m.pos[0], this.body.z - m.pos[2]);
+    if (d < m.radius * 1.4) this.shake = Math.min(1, this.shake + 0.35);
+  }
+
+  onCharm(m) {
+    const c = this.chars.get(m.to);
+    if (c) this.effects.text([c.root.position.x, c.root.position.y + 2.8, c.root.position.z], '💖', { scale: 1.2, life: 1.2, stroke: null });
+    if (m.to !== this.myId) return;
+    this.charmUntil = performance.now() + m.ms;
+    this.charmBy = m.id;
+    this.emote = 0;
+    this.mouseDown = false;
+    this.hud.setCharm(m.ms);
+    this.hud.shout(t('shout.charm', { name: this.nameOf(m.id) }), 'red');
+  }
+
+  onStun(m) {
+    if (m.to !== this.myId) return;
+    this.stunUntil = performance.now() + m.ms;
+    this.emote = 0;
+    this.mouseDown = false;
+    this.hud.shout(t('shout.stun', { name: this.nameOf(m.id) }), 'red');
+    this.sfx.bonk();
+  }
+
+  disabled() {
+    const t = performance.now();
+    return t < this.stunUntil || t < this.charmUntil;
   }
 
   // 오펜하이머: 위로 올라가는 현악기 → 번쩍 → 잠깐 정적 → 쾅
@@ -876,13 +922,29 @@ export class Game {
       this.sfx.say('sigma', { pitch: 0.1, rate: 0.6 });
     } else if (kind === 'minsu') {
       this.sfx.boing(true);
-      this.sfx.say('눈깔 레이저', { lang: 'ko-KR', pitch: 0.2, rate: 0.8 });
+      this.sfx.say(t('tts.laser'), { lang: ttsLang(), pitch: 0.2, rate: 0.8 });
     } else if (kind === 'cat') {
       this.sfx.meow();
-      this.sfx.say('냥냥 급습', { lang: 'ko-KR', pitch: 1.9, rate: 1.3 });
+      this.sfx.say(t('tts.cat'), { lang: ttsLang(), pitch: 1.9, rate: 1.3 });
     } else if (kind === 'toilet') {
       this.sfx.flush(ms);
       this.sfx.say('flush', { pitch: 0.1, rate: 0.5 });
+    } else if (kind === 'shark') {
+      this.sfx.vineBoom();
+      this.sfx.say('tralalero tralala', { lang: 'it-IT', pitch: 0.4, rate: 1.1 });
+    } else if (kind === 'tung') {
+      this.sfx.say('tung tung tung sahur', { pitch: 0.2, rate: 0.9 });
+    } else if (kind === 'croc') {
+      this.effects.dogPlane(1, 24);
+      setTimeout(() => this.effects.dogPlane(-1, 28), 1700);
+      this.sfx.planeFlyby();
+      this.sfx.say('bombardiro crocodilo', { lang: 'it-IT', pitch: 0.3, rate: 0.9 });
+    } else if (kind === 'rizz') {
+      this.sfx.sparkle();
+      this.sfx.say('rizz', { pitch: 0.2, rate: 0.5 });
+    } else if (kind === 'boss') {
+      this.sfx.bong();
+      this.sfx.say(t('tts.boss'), { lang: ttsLang(), pitch: 0.3, rate: 0.8 });
     }
   }
 
@@ -897,8 +959,8 @@ export class Game {
         this.ultra = true;
         this.ultraKind = m.kind;
         this.emote = 0;
-        const def = ULTRAS[m.kind];
-        this.hud.setUltra(true, m.ms, def.name);
+        const ultraName = t(`ultra.${m.kind}`);
+        this.hud.setUltra(true, m.ms, ultraName);
         this.fovKick = 22;
         if (this.infAmmo()) this.reloadT = 0;
         if (m.kind === 'cat') {
@@ -910,11 +972,11 @@ export class Game {
           this.setHudVisible(false);
           this.hud.setWeapon(LASER);
         }
-        if (m.kind !== 'cone') this.hud.shout(def.name, 'gold');
+        if (m.kind !== 'cone') this.hud.shout(ultraName, 'gold');
         this.ultraIntro(m.kind, m.ms);
       } else this.ultraOff();
     } else if (m.on) {
-      if (m.kind !== 'cone') this.hud.shout(`${this.nameOf(m.id)}: ${ULTRAS[m.kind].name} 도망쳐`, 'red');
+      if (m.kind !== 'cone') this.hud.shout(t('shout.flee', { name: this.nameOf(m.id), ultra: t(`ultra.${m.kind}`) }), 'red');
       this.ultraIntro(m.kind, m.ms);
       if (m.kind === 'sigma') this.sfx.airhorn();
     }
@@ -929,10 +991,9 @@ export class Game {
       for (const c of this.chars.values()) c.bigHead = false;
       return;
     }
-    const def = EVENTS[m.kind];
-    this.hud.eventBanner(def.name, m.ms);
+    this.hud.eventBanner(t(`event.${m.kind}`), m.ms);
     this.sfx.bong();
-    this.sfx.sayMeme(def.say);
+    this.sfx.sayMeme(t(`eventSay.${m.kind}`));
     if (m.kind === 'bighead') for (const c of this.chars.values()) c.bigHead = true;
     if (m.kind === 'dogfight') {
       this.effects.dogPlane(1, 24);
@@ -963,7 +1024,7 @@ export class Game {
     if (m.by === this.myId) {
       if (m.kind === 'chicken') {
         this.sfx.chomp();
-        this.hud.shout('🍗 맛도리', 'gold');
+        this.hud.shout(t('shout.chicken'), 'gold');
       }
     }
   }
@@ -992,7 +1053,7 @@ export class Game {
 
   tryFire() {
     const w = this.curWeapon();
-    if (performance.now() < this.cineUntil) return;
+    if (performance.now() < this.cineUntil || this.disabled()) return;
     if (this.forced || this.frozen || !this.alive || this.cooldown > 0 || this.reloadT > 0 || this.slapT > 0.12) return;
     if (this.emote) return;
     const inf = this.infAmmo();
@@ -1053,7 +1114,7 @@ export class Game {
   }
 
   slap() {
-    if (this.forced || this.frozen || !this.alive || this.slapCd > 0 || this.emote) return;
+    if (this.forced || this.disabled() || this.frozen || !this.alive || this.slapCd > 0 || this.emote) return;
     this.slapCd = SLAP.cooldown;
     this.slapT = 0.26;
     this.sfx.whiff();
@@ -1193,23 +1254,39 @@ export class Game {
     const k = this.keys;
     const held = (c) => k.has(c);
     let emote = 0;
-    if (!this.frozen && this.body.onGround && !this.ultraKind) {
+    const stunned = performance.now() < this.stunUntil;
+    const charmed = performance.now() < this.charmUntil;
+    if (!this.frozen && this.body.onGround && !this.ultraKind && !stunned && !charmed) {
       if (held('KeyG')) emote = 1;
       else if (held('KeyT')) emote = 2;
     }
     if (emote && !this.emote) {
       this.sfx.vineBoom();
       this.sfx.say(emote === 1 ? 'aura farming' : 'six seven', { pitch: 0.3, rate: 0.8 });
-      if (emote === 1) this.hud.shout('아우라 파밍 중...', 'gold');
+      if (emote === 1) this.hud.shout(t('shout.farming'), 'gold');
     }
     this.emote = emote;
 
-    const fwd = emote || this.frozen ? 0 : (held('KeyW') ? 1 : 0) - (held('KeyS') ? 1 : 0);
-    const right = emote || this.frozen ? 0 : (held('KeyD') ? 1 : 0) - (held('KeyA') ? 1 : 0);
+    let fwd = emote || this.frozen ? 0 : (held('KeyW') ? 1 : 0) - (held('KeyS') ? 1 : 0);
+    let right = emote || this.frozen ? 0 : (held('KeyD') ? 1 : 0) - (held('KeyA') ? 1 : 0);
+    if (stunned) { fwd = 0; right = 0; }
+    if (charmed && !stunned) {
+      // 반한 사람에게 저절로 걸어간다
+      const r = this.renderOf(this.charmBy);
+      right = 0;
+      fwd = 0;
+      if (r) {
+        const dx = r.p[0] - this.body.x, dz = r.p[2] - this.body.z;
+        this.yaw = Math.atan2(-dx, -dz);
+        fwd = Math.hypot(dx, dz) > 1.6 ? 1 : 0;
+      }
+    }
+    const locked = stunned || charmed;
+    if (locked) { this.jumpQueued = false; this.dashQueued = false; this.shotQueued = false; }
     const opts = {
       map: this.map,
       gravityMul: this.eventKind === 'moon' ? 0.35 : 1,
-      speedMul: this.ultraKind === 'sigma' ? MOVE.ultraSpeedMul : this.grabbedBy !== null ? 0.55 : 1,
+      speedMul: this.ultraKind === 'sigma' ? MOVE.ultraSpeedMul : this.ultraKind === 'shark' ? SHARK.speedMul : this.grabbedBy !== null ? 0.55 : 1,
     };
     const events = stepBodyFixed(this.body, {
       fwd, right, yaw: this.yaw, jump: this.jumpQueued && !this.frozen, dash: this.dashQueued && !this.frozen,
@@ -1219,7 +1296,7 @@ export class Game {
     for (const e of events) {
       if (e === 'jump') this.sfx.quack();
       if (e === 'doubleJump') { this.sfx.quack(); this.sfx.boing(); this.spin = Math.PI * 2; }
-      if (e === 'pad') { this.sfx.boing(true); this.hud.shout('뿌잉', 'gold'); }
+      if (e === 'pad') { this.sfx.boing(true); this.hud.shout(t('shout.pad'), 'gold'); }
       if (e === 'dash') { this.sfx.dash(); this.fovKick = 12; }
       if (e === 'land') this.sfx.land();
     }

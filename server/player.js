@@ -30,6 +30,10 @@ export class Player {
     this.ultraKind = null;
     this.cat = null;
     this.flush = null;
+    this.ultraTick = 0;
+    this.charmUntil = 0;
+    this.charmBy = null;
+    this.stunUntil = 0;
     this.lastHitBy = null;
     this.lastHitAt = 0;
     this.lastShot = {};

@@ -58,12 +58,12 @@ export function createHub({ timings = {}, autoTick = true } = {}) {
         break;
       }
       case 'create':
-        if (!r) createRoom(cleanName(m.name, `${p.name}의 방`, 20)).add(p);
+        if (!r) createRoom(cleanName(m.name, `${p.name}'s room`, 20)).add(p);
         break;
       case 'join':
         if (!r) {
           const room = rooms.get(String(m.id));
-          if (!room || !room.add(p)) p.send({ t: 'error', text: '그 방은 못 들어감. 꽉 찼거나 게임 중임.' });
+          if (!room || !room.add(p)) p.send({ t: 'error', key: 'err.roomFull' });
         }
         break;
       case 'leave':
@@ -103,7 +103,7 @@ export function createHub({ timings = {}, autoTick = true } = {}) {
     tick,
     // 접속 하나 연결. rawSend(문자열)로 보내고, message/close를 불러 준다.
     connect(rawSend) {
-      const p = new HumanPlayer(hub.nextId(), '익명의 NPC', 'minsu', rawSend);
+      const p = new HumanPlayer(hub.nextId(), 'Random NPC', 'minsu', rawSend);
       clients.add(p);
       p.send({ t: 'welcome', id: p.id, rooms: [...rooms.values()].map((r) => r.summary()), tickHz: TICK_HZ });
       return {

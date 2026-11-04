@@ -170,6 +170,55 @@ export class Character {
       this.head.position.y = 1.32;
       this.armL.position.y = 1.0;
       this.armR.position.y = 1.0;
+    } else if (skinId === 'shark') {
+      const fin = mesh(new THREE.ConeGeometry(0.24, 0.62, 4), skin, 0, 0.62, 0.12);
+      fin.scale.z = 0.35;
+      this.head.add(fin);
+      const white = basic(0xffffff);
+      for (let i = 0; i < 5; i++) {
+        const tooth = mesh(new THREE.ConeGeometry(0.045, 0.12, 4), white, -0.18 + i * 0.09, -0.16, -0.5);
+        tooth.rotation.x = Math.PI;
+        this.head.add(tooth);
+      }
+      const tail = mesh(new THREE.ConeGeometry(0.28, 0.8, 4), skin, 0, 0.8, 0.5);
+      tail.rotation.x = 1.9;
+      tail.scale.x = 0.4;
+      v.add(tail);
+    } else if (skinId === 'tung') {
+      this.torso.geometry = new THREE.CylinderGeometry(0.42, 0.42, 0.8, 12);
+      const ring = lambert(0x5c3a1c);
+      v.add(mesh(new THREE.CylinderGeometry(0.43, 0.43, 0.05, 12), ring, 0, 0.8, 0));
+      v.add(mesh(new THREE.CylinderGeometry(0.43, 0.43, 0.05, 12), ring, 0, 1.15, 0));
+      this.head.add(mesh(new THREE.CylinderGeometry(0.53, 0.53, 0.1, 14), ring, 0, 0.5, 0));
+      this.bat = mesh(new THREE.CylinderGeometry(0.11, 0.05, 1.1, 8), lambert(0xc9975c), 0, -0.9, -0.08);
+      this.armL.add(this.bat);
+    } else if (skinId === 'croc') {
+      const snout = mesh(new THREE.BoxGeometry(0.46, 0.24, 0.72), skin, 0, -0.1, -0.68);
+      this.head.add(snout);
+      const white = basic(0xffffff);
+      for (const s of [-1, 1]) {
+        for (let i = 0; i < 4; i++) {
+          const tooth = mesh(new THREE.ConeGeometry(0.04, 0.11, 4), white, s * 0.21, -0.26, -0.45 - i * 0.16);
+          tooth.rotation.x = Math.PI;
+          this.head.add(tooth);
+        }
+      }
+      const grey = lambert(0x8d99a6);
+      v.add(mesh(new THREE.BoxGeometry(2.2, 0.07, 0.42), grey, 0, 1.08, 0.1));
+      v.add(mesh(new THREE.BoxGeometry(0.06, 0.5, 0.36), grey, 0, 1.25, 0.42));
+    } else if (skinId === 'rizz') {
+      const hair = lambert(0x1a1a24);
+      this.head.add(mesh(new THREE.SphereGeometry(0.53, 14, 8, 0, Math.PI * 2, 0, 0.95), hair, 0, 0.03, 0.02));
+      const quiff = mesh(new THREE.SphereGeometry(0.3, 12, 8), hair, 0, 0.44, -0.24);
+      quiff.scale.set(1.2, 0.8, 1.2);
+      this.head.add(quiff);
+      v.add(mesh(new THREE.TorusGeometry(0.27, 0.035, 6, 18).rotateX(1.25), basic(0xffd700), 0, 1.22, -0.08));
+    } else if (skinId === 'boss') {
+      const dark = basic(0x111111);
+      this.head.add(mesh(new THREE.BoxGeometry(0.36, 0.07, 0.08), dark, 0, -0.08, -0.5));
+      this.head.add(mesh(new THREE.TorusGeometry(0.15, 0.018, 6, 16), dark, -0.21, 0.12, -0.54));
+      this.head.add(mesh(new THREE.TorusGeometry(0.15, 0.018, 6, 16), dark, 0.21, 0.12, -0.54));
+      v.add(mesh(new THREE.BoxGeometry(0.13, 0.5, 0.04), basic(0xcc1122), 0, 0.98, -0.36));
     } else {
       this.head.add(mesh(new THREE.SphereGeometry(0.53, 14, 8, 0, Math.PI * 2, 0, 0.9), lambert(0x2b1a10), 0, 0.03, 0.02));
     }
@@ -310,7 +359,21 @@ export class Character {
     this.visual.rotation.y = 0;
     this.visual.position.y = moving ? Math.abs(Math.sin(this.walkT)) * 0.07 : 0;
     const farming = this.emote === 1;
-    if (kind === 'cat') {
+    if (kind === 'shark') {
+      // 상어 돌진: 앞으로 누워서 쌩
+      this.armL.rotation.set(-0.3, 0, 0.9);
+      this.armR.rotation.set(-0.3, 0, -0.9);
+      this.visual.rotation.x = -1.2;
+      this.visual.rotation.z = Math.sin(t * 22) * 0.25;
+      this.head.rotation.y = 0;
+    } else if (kind === 'tung') {
+      const s = Math.sin(t * 9.4);
+      this.armL.rotation.set(-2.1 + s * 1.1, 0, 0.2);
+      this.armR.rotation.set(-1.3, 0, 0);
+      this.visual.rotation.x = 0;
+      this.visual.rotation.z = s * 0.06;
+      this.head.rotation.y = 0;
+    } else if (kind === 'cat') {
       // 앞으로 눕듯이 날아서 양손으로 마구 할퀸다
       const s = Math.sin(t * 34);
       this.armL.rotation.set(-2.5 + s * 0.8, 0, 0.3);
@@ -340,7 +403,7 @@ export class Character {
       this.visual.rotation.z = 0;
       this.head.rotation.y = 0;
     }
-    this.gun.visible = this.emote === 0 && kind !== 'cat' && kind !== 'minsu';
+    this.gun.visible = this.emote === 0 && kind !== 'cat' && kind !== 'minsu' && kind !== 'shark';
     if (kind === 'toilet') this.visual.rotation.y = t * 11;
     this.whirl.visible = this.whirl2.visible = kind === 'toilet';
     if (kind === 'toilet') {
@@ -350,7 +413,7 @@ export class Character {
     }
 
     // 아우라
-    const auraOn = farming || kind === 'sigma' || kind === 'cone';
+    const auraOn = farming || kind === 'sigma' || kind === 'cone' || kind === 'rizz';
     this.shades.visible = auraOn;
     this.crown.visible = kind === 'sigma';
     const wantGlow = this.ultra ? 0.6 : farming ? 0.38 : 0;

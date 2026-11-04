@@ -369,6 +369,13 @@ export class Sfx {
     this.noise(0.07, 0.5, { f0: rand(2500, 4000), f1: rand(700, 1200), q: 2, a: 0.002 });
   }
 
+  tungTung() {
+    if (!this.ready) return;
+    this.osc('triangle', 330, 150, 0.14, 1, { a: 0.001, out: this.crunch });
+    this.noise(0.03, 0.6, { f0: 1300, q: 3, a: 0.001 });
+    this.osc('sine', 95, 45, 0.3, 0.8);
+  }
+
   // 변기 물 내려가는 소리
   flush(ms = 5000) {
     if (!this.ready) return;

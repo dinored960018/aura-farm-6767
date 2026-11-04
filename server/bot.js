@@ -44,9 +44,9 @@ export class Bot extends Player {
   }
 
   // 가깝고 보이는 상대 우선
-  chooseTarget(room, eye) {
+  chooseTarget(room, eye, only = null) {
     let best = null, bestScore = Infinity;
-    for (const o of room.others(this)) {
+    for (const o of only ? [only] : room.others(this)) {
       if (!o.alive) continue;
       const tgt = [o.pos[0], o.pos[1] + 1.1, o.pos[2]];
       const to = [tgt[0] - eye[0], tgt[1] - eye[1], tgt[2] - eye[2]];
@@ -63,8 +63,10 @@ export class Bot extends Player {
     if (!this.alive) return;
     const map = room.map;
     const eye = [this.pos[0], this.pos[1] + PLAYER.eye, this.pos[2]];
-    const opts = { map, gravityMul: room.event?.kind === 'moon' ? 0.35 : 1, speedMul: 0.82 };
-    const t = this.chooseTarget(room, eye);
+    const opts = { map, gravityMul: room.event?.kind === 'moon' ? 0.35 : 1, speedMul: this.ultraKind === 'shark' ? 1.5 : 0.82 };
+    const stunned = now < this.stunUntil;
+    const charmed = now < this.charmUntil && this.charmBy?.alive;
+    const t = stunned ? null : this.chooseTarget(room, eye, charmed ? this.charmBy : null);
     if (!t) {
       stepBodyFixed(this.body, { fwd: 0, right: 0, yaw: this.yaw }, dt, opts);
       this.pos = [this.body.x, this.body.y, this.body.z];
@@ -96,7 +98,7 @@ export class Bot extends Player {
     if (!emoting) { this.emote = 0; this.emoteUntil = 0; }
 
     // 각성은 상대가 보일 때 쓴다
-    if (canSee && this.aura >= AURA_MAX && !this.ultraKind) {
+    if (canSee && this.aura >= AURA_MAX && !this.ultraKind && !charmed) {
       room.onUltra(this);
       if (this.cat) return;
     }
@@ -104,7 +106,7 @@ export class Bot extends Player {
     // 이동: 가까우면 좌우로 비비고, 멀면 길찾기
     const input = { fwd: 0, right: 0, yaw: this.yaw, jump: false, dash: false };
     if (!emoting) {
-      if (canSee && dist <= 7) {
+      if (canSee && dist <= 7 && !charmed && this.ultraKind !== 'shark') {
         input.fwd = dist < 4 ? -0.6 : 0;
         input.right = this.strafe;
         const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
@@ -144,7 +146,7 @@ export class Bot extends Player {
     if (this.hp < MAX_HP) room.checkPickups(this, now);
 
     // 사격
-    if (canSee && now - this.seenSince > 450 && now > this.nextShot) {
+    if (canSee && !charmed && now - this.seenSince > 450 && now > this.nextShot) {
       if (dist < 3 && !room.isGrabbed(this)) {
         this.nextShot = now + 900;
         room.onSlap(this, { d: dir });
