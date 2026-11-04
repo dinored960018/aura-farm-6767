@@ -19,6 +19,20 @@ for (const f of ['three.module.js', 'three.core.js']) {
 }
 fs.mkdirSync(path.join(dist, 'vendor/peerjs'));
 fs.copyFileSync(path.join(root, 'node_modules/peerjs/dist/peerjs.min.js'), path.join(dist, 'vendor/peerjs/peerjs.min.js'));
+// 모든 상대 경로 import에 배포 버전을 붙인다
+const ver = Date.now().toString(36);
+const stamp = (dir) => {
+  for (const f of fs.readdirSync(dir)) {
+    if (!f.endsWith('.js')) continue;
+    const p = path.join(dir, f);
+    fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace(/(['"])(\.{1,2}\/[^'"\n]+?\.js)\1/g, `$1$2?v=${ver}$1`));
+  }
+};
+for (const d of ['js', 'shared', 'server']) stamp(path.join(dist, d));
+const indexPath = path.join(dist, 'index.html');
+fs.writeFileSync(indexPath, fs.readFileSync(indexPath, 'utf8')
+  .replace('href="style.css"', `href="style.css?v=${ver}"`)
+  .replace('src="js/main.js"', `src="js/main.js?v=${ver}"`));
 fs.writeFileSync(path.join(dist, '.nojekyll'), '');
 console.log('dist 생성');
 

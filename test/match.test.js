@@ -225,6 +225,32 @@ async function startRoom(n, { skins = [], map } = {}) {
   return { cs, startMsg, close: async () => { cs.forEach((c) => c.ws.close()); await sleep(50); } };
 }
 
+test('대기실에서 닉변하면 모두에게 보이고, 경기 중에는 안 바뀐다', async () => {
+  const a = await new C().open('민수');
+  const b = await new C().open('철수');
+  a.send({ t: 'create' });
+  await a.wait((m) => m.t === 'room');
+  b.send({ t: 'join', id: a.room.id });
+  await a.wait((m) => m.t === 'room' && m.room.players.length === 2);
+  const seen = b.wait((m) => m.t === 'room' && m.room.players.some((p) => p.name === '시그마'));
+  const note = b.wait((m) => m.t === 'chat' && m.text.includes('시그마'));
+  a.send({ t: 'rename', name: '  시그마  ' });
+  await seen;
+  await note;
+  a.send({ t: 'rename', name: '   ' });
+  a.send({ t: 'rename', name: 'x'.repeat(50) });
+  await a.wait((m) => m.t === 'room' && m.room.players.some((p) => p.name === 'x'.repeat(12)));
+  const go = a.wait((m) => m.t === 'go');
+  a.send({ t: 'ready', ready: true });
+  b.send({ t: 'ready', ready: true });
+  await go;
+  a.send({ t: 'rename', name: '경기중닉변' });
+  await sleep(40);
+  assert.equal(roomOf(a).players.find((p) => p.id === a.id).name, 'x'.repeat(12));
+  a.ws.close(); b.ws.close();
+  await sleep(50);
+});
+
 test('4명까지 들어오고 5번째는 못 들어오며, 봇도 4명까지만', async () => {
   const cs = [];
   for (let k = 0; k < MAX_PLAYERS + 1; k++) cs.push(await new C().open('P' + k));

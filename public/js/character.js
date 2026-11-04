@@ -58,6 +58,7 @@ const GEO = {
 export class Character {
   constructor(skinId, name) {
     this.skinId = skinId;
+    this.nameText = name;
     this.root = new THREE.Group();
     this.visual = new THREE.Group();
     this.root.add(this.visual);

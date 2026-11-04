@@ -51,6 +51,12 @@ export function createHub({ timings = {}, autoTick = true } = {}) {
         p.name = cleanName(m.name, p.name);
         if (SKIN_IDS.includes(m.skin)) p.skin = m.skin;
         break;
+      case 'rename': {
+        const name = cleanName(m.name, p.name);
+        if (r) r.rename(p, name);
+        else p.name = name;
+        break;
+      }
       case 'create':
         if (!r) createRoom(cleanName(m.name, `${p.name}의 방`, 20)).add(p);
         break;

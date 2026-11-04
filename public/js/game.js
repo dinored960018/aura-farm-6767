@@ -476,7 +476,7 @@ export class Game {
     for (const p of players) wanted.set(p.id, p);
     for (const [id, c] of this.chars) {
       const w = wanted.get(id);
-      if (!w || c.skinId !== w.skin) { c.dispose(this.scene); this.chars.delete(id); }
+      if (!w || c.skinId !== w.skin || c.nameText !== w.name) { c.dispose(this.scene); this.chars.delete(id); }
     }
     for (const p of players) {
       if (!this.chars.has(p.id)) {

@@ -141,6 +141,14 @@ export class Room {
     this.sendRoom();
   }
 
+  rename(player, name) {
+    if (this.state !== 'lobby' || player.name === name) return;
+    const old = player.name;
+    player.name = name;
+    this.broadcast({ t: 'chat', from: '시스템', text: `${old} → ${name} 닉변함` });
+    this.sendRoom();
+  }
+
   chat(player, text) {
     const clean = String(text ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 120);
     if (clean) this.broadcast({ t: 'chat', from: player.name, text: clean });

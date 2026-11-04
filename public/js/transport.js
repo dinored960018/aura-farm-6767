@@ -79,33 +79,41 @@ class HostTransport extends Fake {
 
   // 첫 방을 만들 때 초대 코드를 받아 온다
   async openInvites(onError) {
-    if (this.peer) return;
+    if (this.inviting) return;
+    this.inviting = true;
+    this.assignCode();
     try {
       const Peer = await loadPeer();
       this.tryRegister(Peer, onError, 0);
     } catch (e) {
       this.peerFailed = true;
+      this.code = null;
+      this.onCode?.();
       onError?.(e);
     }
   }
 
+  assignCode() {
+    this.code = Array.from(crypto.getRandomValues(new Uint8Array(5)), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
+    try { sessionStorage.setItem('aura-host-code', this.code); } catch { /* 무시 */ }
+    this.onCode?.();
+  }
+
   tryRegister(Peer, onError, attempt) {
-    const code = Array.from(crypto.getRandomValues(new Uint8Array(5)), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
-    const peer = new Peer(PREFIX + code);
+    const peer = new Peer(PREFIX + this.code);
     this.peer = peer;
-    peer.on('open', () => {
-      this.code = code;
-      try { sessionStorage.setItem('aura-host-code', code); } catch { /* 무시 */ }
-      this.onCode?.();
-    });
+    peer.on('open', () => { this.registered = true; });
     peer.on('connection', (conn) => this.addGuest(conn));
     peer.on('disconnected', () => { if (!peer.destroyed) peer.reconnect(); }); // 새 손님을 받으려면 필요
     peer.on('error', (e) => {
       if (e.type === 'unavailable-id' && attempt < 5) {
         peer.destroy();
+        this.assignCode();
         this.tryRegister(Peer, onError, attempt + 1);
-      } else if (!this.code) {
+      } else if (!this.registered) {
         this.peerFailed = true;
+        this.code = null;
+        this.onCode?.();
         onError?.(e);
       }
     });

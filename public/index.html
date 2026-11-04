@@ -111,6 +111,10 @@
 <section id="room" class="panelScreen roomLayout" hidden>
   <div class="card side">
     <div class="titleRow"><h2 id="roomTitle">대기실</h2><button id="leaveBtn" class="ghost">나가기</button></div>
+    <form id="renameForm" class="row">
+      <input id="renameInput" maxlength="12" placeholder="닉네임" autocomplete="off" aria-label="닉네임">
+      <button class="ghost">닉변</button>
+    </form>
     <div id="slots"></div>
     <button id="readyBtn" class="primary big">준비</button>
     <div class="row">

@@ -90,7 +90,7 @@ input { font: inherit; }
 .skinBtn.on { background: var(--gold); }
 .skinBtn:hover { background: #fff1b8; }
 #chatLog { flex: 1; min-height: 110px; max-height: 32vh; overflow-y: auto; background: #fff; border: 3px solid var(--ink); border-radius: 4px; padding: 8px; font-size: 14px; display: flex; flex-direction: column; gap: 3px; overflow-wrap: anywhere; }
-#chatForm .ghost { flex: none; }
+#chatForm .ghost, #renameForm .ghost { flex: none; }
 .help { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
 
 @media (max-width: 780px) {

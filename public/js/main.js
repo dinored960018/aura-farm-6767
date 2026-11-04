@@ -339,6 +339,7 @@ function renderRoom() {
   }
   const me = room.players.find((p) => p.id === net.id);
   myReady = !!me?.ready;
+  if (me && document.activeElement !== $('renameInput')) $('renameInput').value = me.name;
   const rb = $('readyBtn');
   rb.textContent = myReady ? '준비 취소' : room.players.length < 2 ? '준비 (상대 기다리는 중)' : '준비 완료 🗿';
   rb.classList.toggle('on', myReady);
@@ -368,7 +369,7 @@ $('botOutBtn').onclick = () => net.send({ t: 'removeBot' });
 $('leaveBtn').onclick = () => net.send({ t: 'leave' });
 $('copyBtn').onclick = async () => {
   const { ws } = net;
-  if (P2P && !ws.code && !ws.isGuest) {
+  if (P2P && !ws.registered && !ws.isGuest) {
     toast(ws.peerFailed ? '초대 서버 연결 실패. 봇전만 가능' : '초대 코드 받는 중. 잠깐만');
     return;
   }
@@ -378,6 +379,17 @@ $('copyBtn').onclick = async () => {
     toast(P2P ? `초대 링크 복사함 (코드 ${ws.code})` : '주소 복사함');
   } catch { toast(url); }
 };
+
+$('renameForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const name = $('renameInput').value.trim();
+  $('renameInput').blur();
+  if (!name) { renderRoom(); return; }
+  $('nameInput').value = name;
+  try { localStorage.setItem('aura-name', name); } catch { /* 무시 */ }
+  net.send({ t: 'rename', name });
+  sfx.quack();
+});
 
 $('chatForm').addEventListener('submit', (e) => {
   e.preventDefault();
