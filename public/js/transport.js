@@ -7,7 +7,12 @@ const SILENCE_MS = 10000; // 이만큼 아무 신호 없으면 끊긴 걸로 본
 const params = new URLSearchParams(location.search);
 
 export const P2P = location.hostname.endsWith('github.io') || params.has('p2p');
-export const inviteCode = params.get('room')?.toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
+let requested = params.get('room')?.toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
+// 방장이 자기 방 주소에서 새로고침한 경우: 손님이 아니라 다시 방장으로 시작
+try {
+  if (P2P && requested && sessionStorage.getItem('aura-host-code') === requested) requested = null;
+} catch { /* 저장 안 되는 브라우저 */ }
+export const inviteCode = requested;
 
 let peerLib = null;
 function loadPeer() {
@@ -88,7 +93,11 @@ class HostTransport extends Fake {
     const code = Array.from(crypto.getRandomValues(new Uint8Array(5)), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
     const peer = new Peer(PREFIX + code);
     this.peer = peer;
-    peer.on('open', () => { this.code = code; });
+    peer.on('open', () => {
+      this.code = code;
+      try { sessionStorage.setItem('aura-host-code', code); } catch { /* 무시 */ }
+      this.onCode?.();
+    });
     peer.on('connection', (conn) => this.addGuest(conn));
     peer.on('disconnected', () => { if (!peer.destroyed) peer.reconnect(); }); // 새 손님을 받으려면 필요
     peer.on('error', (e) => {

@@ -4,7 +4,7 @@ import { MAPS, MAP_IDS } from '../shared/map.js';
 import { Sfx } from './audio.js';
 import { Hud } from './hud.js';
 import { Game } from './game.js';
-import { P2P, inviteUrl, openTransport } from './transport.js';
+import { P2P, inviteCode, inviteUrl, openTransport } from './transport.js';
 import { TICKER, RESULT_WIN, RESULT_LOSE, SKIN_FACE, pick } from './memes.js';
 
 const $ = (id) => document.getElementById(id);
@@ -58,6 +58,7 @@ function connect() {
     $('connStatus').classList.remove('ok');
     if (inMatch) leaveMatchView();
     room = null;
+    syncAddress();
     hud.show(false);
     game.setAttract([]);
     showScreen('home');
@@ -72,6 +73,24 @@ function sendHello() {
 
 const H = net.handlers;
 let joined = false;
+let invitedToast = false;
+
+// 방에 있는 동안 주소창 링크가 곧 초대 링크다
+function syncAddress() {
+  const { ws } = net;
+  if (ws?.isGuest) return; // 손님 주소에는 이미 코드가 있다
+  const code = !room ? null : P2P ? ws?.code : room.id;
+  const u = new URL(location.href);
+  if ((u.searchParams.get('room') ?? null) === (code ?? null)) return;
+  if (code) u.searchParams.set('room', code);
+  else u.searchParams.delete('room');
+  history.replaceState(null, '', u.href);
+  if (code && !invitedToast && !invitedByLink) {
+    invitedToast = true;
+    toast('지금 주소창 링크를 친구한테 보내면 이 방으로 들어옴');
+  }
+}
+let invitedByLink = false;
 function leaveToHome(text) {
   toast(text);
   $('connStatus').textContent = text;
@@ -84,6 +103,15 @@ function leaveToHome(text) {
 H.welcome = (m) => {
   net.id = m.id;
   renderRooms(m.rooms);
+  // 로컬 서버: 주소의 방 번호로 바로 입장
+  if (!P2P && inviteCode && !joined) {
+    joined = true;
+    invitedByLink = true;
+    sendHello();
+    net.send({ t: 'join', id: inviteCode });
+  }
+  // 방장이 새로고침한 경우 주소의 옛 코드를 지운다
+  if (P2P && net.ws.isHost) syncAddress();
   // 초대 링크로 왔으면 바로 입장
   if (net.ws.isGuest && !joined) {
     if (!m.rooms.length) { toast('방이 아직 없음'); return; }
@@ -99,9 +127,13 @@ H.pong = (m) => {
   $('ping').textContent = `${net.rtt}ms`;
 };
 H.rooms = (m) => renderRooms(m.rooms);
-H.error = (m) => toast(m.text);
+H.error = (m) => {
+  toast(m.text);
+  syncAddress();
+};
 H.left = () => {
   room = null;
+  syncAddress();
   showScreen('home');
   game.setAttract([]);
   sfx.playMusic('lobby');
@@ -109,6 +141,7 @@ H.left = () => {
 H.room = (m) => {
   const wasIn = !!room;
   room = m.room;
+  syncAddress();
   for (const p of room.players) hud.names.set(p.id, p.name);
   if (inMatch) game.onRoster(room.players);
   if (!inMatch) {
@@ -189,6 +222,7 @@ window.addEventListener('keydown', firstGesture, { once: true });
 $('createBtn').onclick = () => {
   sfx.unlock();
   sendHello();
+  if (net.ws.isHost) net.ws.onCode = syncAddress;
   net.ws.openInvites?.(() => toast('초대 서버 연결 실패. 봇전은 됨'));
   net.send({ t: 'create', name: $('roomNameInput').value });
   sfx.boing();
@@ -334,11 +368,11 @@ $('botOutBtn').onclick = () => net.send({ t: 'removeBot' });
 $('leaveBtn').onclick = () => net.send({ t: 'leave' });
 $('copyBtn').onclick = async () => {
   const { ws } = net;
-  if (P2P && !ws.code) {
+  if (P2P && !ws.code && !ws.isGuest) {
     toast(ws.peerFailed ? '초대 서버 연결 실패. 봇전만 가능' : '초대 코드 받는 중. 잠깐만');
     return;
   }
-  const url = P2P ? inviteUrl(ws.code) : location.href.split('#')[0];
+  const url = location.href.split('#')[0];
   try {
     await navigator.clipboard.writeText(url);
     toast(P2P ? `초대 링크 복사함 (코드 ${ws.code})` : '주소 복사함');
