@@ -62,8 +62,8 @@ class HostTransport extends Fake {
   }
 
   async start() {
-    const { createHub } = await import('../../server/hub.js');
-    const { TICK_MS } = await import('../../server/room.js');
+    const { createHub } = await import('../server/hub.js');
+    const { TICK_MS } = await import('../server/room.js');
     this.hub = createHub({ autoTick: false });
     workerTimer(TICK_MS, () => this.hub.tick());
     this.client = this.hub.connect((raw) => queueMicrotask(() => this.deliver(raw)));
