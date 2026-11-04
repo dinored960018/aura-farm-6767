@@ -27,6 +27,11 @@ export class Player {
     this.respawnAt = 0;
     this.invulnUntil = 0;
     this.ultraUntil = 0;
+    this.ultraKind = null;
+    this.cat = null;
+    this.flush = null;
+    this.lastHitBy = null;
+    this.lastHitAt = 0;
     this.lastShot = {};
     this.lastSlap = 0;
     this.lastSixSeven = 0;
@@ -54,6 +59,13 @@ export class Player {
       }
     }
     return this.pos;
+  }
+
+  // 서버가 위치를 정해 줄 때 (고양이 착지)
+  teleport(pos) {
+    this.pos = [...pos];
+    this.history = [];
+    this.send({ t: 'teleport', pos: this.pos });
   }
 
   send() {}

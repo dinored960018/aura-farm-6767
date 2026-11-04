@@ -43,6 +43,8 @@ export class Effects {
     this.warnings = [];
     this.bouncers = [];
     this.planes = [];
+    this.map = null;
+    this.camera = null;
   }
 
   add(obj, life, update) {
@@ -53,6 +55,8 @@ export class Effects {
 
   // 공중에 뜨는 글자/이모지
   text(pos, text, { color = '#fff', scale = 1, life = 0.9, rise = 1.8, spin = 0, jitter = 0.4, depthTest = false, stroke = '#000' } = {}) {
+    const cam = this.camera?.position;
+    if (cam && Math.hypot(cam.x - pos[0], cam.y - pos[1], cam.z - pos[2]) < 3.2) return null;
     const tex = textTexture(text, { color, stroke });
     const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest, depthWrite: false });
     const s = new THREE.Sprite(mat);
@@ -116,7 +120,7 @@ export class Effects {
     this.scene.add(g);
     this.bouncers.push({
       g, v: vel.clone(), spin: new THREE.Vector3(rnd(14), rnd(14), rnd(14)), life: 5,
-      floor: Math.max(-24, groundAt(pos.x, pos.z, pos.y + 0.5)),
+      floor: Math.max(-24, groundAt(this.map, pos.x, pos.z, pos.y + 0.5)),
     });
     if (this.bouncers.length > 12) {
       const old = this.bouncers.shift();
@@ -125,7 +129,7 @@ export class Effects {
   }
 
   // 폭탄 경고 원
-  warning(pos, radius, ms) {
+  warning(pos, radius, ms, icon = '🦴', iconScale = 1) {
     const geo = new THREE.RingGeometry(radius * 0.92, radius, 40).rotateX(-Math.PI / 2);
     const mat = new THREE.MeshBasicMaterial({ color: 0xff2200, transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide });
     const ring = new THREE.Mesh(geo, mat);
@@ -144,10 +148,10 @@ export class Effects {
     }).userData.dispose = () => { geo.dispose(); mat.dispose(); fillGeo.dispose(); fillMat.dispose(); };
 
     // 떨어지는 뼈다귀 폭탄
-    const tex = textTexture('🦴', { stroke: null, size: 96, font: '"Segoe UI Emoji", sans-serif' });
+    const tex = textTexture(icon, { stroke: null, size: 96, font: '"Segoe UI Emoji", sans-serif' });
     const bm = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
     const bone = new THREE.Sprite(bm);
-    bone.scale.set(1.4, 1, 1);
+    bone.scale.set(1.4 * iconScale, iconScale, 1);
     this.add(bone, life, (it, dt) => {
       const k = 1 - it.life / it.max;
       bone.position.set(pos[0], pos[1] + (1 - k * k) * 34, pos[2]);
@@ -168,6 +172,58 @@ export class Effects {
       m.scale.setScalar(0.5 + k * 5);
       mat.opacity = 0.8 * (1 - k);
     }).userData.dispose = () => { geo.dispose(); mat.dispose(); };
+  }
+
+  // 버섯구름
+  mushroom(pos, radius) {
+    const [x, y, z] = pos;
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    const fire = new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, fog: false });
+    const smoke = new THREE.MeshBasicMaterial({ color: 0x8a4a22, transparent: true, fog: false });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x4a2c1c, transparent: true, fog: false });
+    const ball = new THREE.SphereGeometry(1, 16, 12);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 1, 1, 14).translate(0, 0.5, 0), dark);
+    g.add(stem);
+    const cap = [];
+    for (let i = 0; i < 11; i++) {
+      const a = (i / 11) * Math.PI * 2;
+      const m = new THREE.Mesh(ball, i % 3 === 0 ? fire : smoke);
+      m.userData = { a, r: 0.75 + (i % 2) * 0.25, h: (i % 3) * 0.12 };
+      g.add(m);
+      cap.push(m);
+    }
+    const core = new THREE.Mesh(ball, fire);
+    g.add(core);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.05, 6, 48).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, fog: false }));
+    ring.position.y = 0.4;
+    g.add(ring);
+    const flash = new THREE.Mesh(ball, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, fog: false, depthWrite: false }));
+    g.add(flash);
+    this.add(g, 8, (it) => {
+      const age = it.max - it.life, k = Math.min(1, age / 3.2);
+      const height = radius * 1.7 * (1 - (1 - k) ** 2);
+      const wide = radius * 0.62 * (0.3 + 0.7 * k);
+      stem.scale.set(wide * 0.42, height, wide * 0.42);
+      core.position.y = height;
+      core.scale.set(wide * 0.8, wide * 0.55, wide * 0.8);
+      for (const m of cap) {
+        const { a, r, h } = m.userData;
+        const spin = a + age * 0.25;
+        m.position.set(Math.cos(spin) * wide * r, height + wide * h, Math.sin(spin) * wide * r);
+        m.scale.set(wide * 0.5, wide * 0.42, wide * 0.5);
+      }
+      const fade = Math.min(1, it.life / 2);
+      fire.opacity = smoke.opacity = dark.opacity = fade;
+      fire.color.setHex(age < 1.5 ? 0xfff0b0 : 0xff9a3c);
+      ring.scale.setScalar(1 + age * radius * 1.7);
+      ring.material.opacity = Math.max(0, 1 - age / 1.1);
+      flash.scale.setScalar(radius * Math.min(1, age * 7));
+      flash.material.opacity = Math.max(0, 1 - age / 0.6);
+    }).userData.dispose = () => {
+      ball.dispose(); stem.geometry.dispose(); ring.geometry.dispose();
+      for (const m of [fire, smoke, dark, ring.material, flash.material]) m.dispose();
+    };
   }
 
   // 개 전투기 편대

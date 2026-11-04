@@ -27,6 +27,7 @@ export const RESULT_LOSE = ['NPC 인증', '아우라 파산', '눈깔 기증자'
 
 export const WEAPON_LABEL = {
   fart: '💨 방귀', six7: '🤌 67', boom: '📢 바인붐', slap: '🖐️ 싸대기', bomb: '🐶 공습', fall: '🕳️ 추락',
+  claw: '🐾 할퀴기', nuke: '☢️ 핵', laser: '👁️ 레이저', flush: '🚽 물내림',
 };
 
 export const SKIN_FACE = { minsu: '😐', sigma: '🗿', cat: '😼', cone: '🛸', toilet: '🚽' };

@@ -5,7 +5,7 @@ export const MAX_HP = 100;
 export const WIN_KILLS = 7;
 export const MATCH_SECONDS = 367; // 6분 7초
 export const AURA_MAX = 6767;
-export const ULTRA_MS = 6700;
+export const MAX_PLAYERS = 4;
 export const INTERP_MS = 100;
 
 export const PLAYER = { radius: 0.45, height: 1.8, eye: 1.55 };
@@ -32,6 +32,8 @@ export const WEAPONS = {
   },
 };
 export const WEAPON_IDS = Object.keys(WEAPONS);
+// 민수 각성 전용 무기
+export const LASER = { id: 'laser', slot: 0, name: '눈깔 레이저', emoji: '👁️', body: 8, head: 16, interval: 0.1, mag: 1, reload: 0, spread: 0, pellets: 1, range: 120, auto: true };
 export const SLAP = { damage: 67, range: 3.4, cooldown: 0.8, knock: 19 };
 
 export const AURA = {
@@ -41,6 +43,19 @@ export const AURA = {
 
 export const CHICKEN_HEAL = 34;
 export const BOMB = { radius: 5, damage: 45, knock: 16, fuseMs: 2000 };
+
+export const NUKE = { radius: 20, damage: 220, knock: 30, fuseMs: 2600, aimRange: 70 };
+export const CAT = { flySpeed: 38, latchRange: 1.3, tickMs: 150, damage: 6.7 };
+export const FLUSH = { radius: 17, coreRadius: 3.5, pull: 9, tickMs: 200, damage: 10 };
+
+// 스킨마다 다른 각성
+export const ULTRAS = {
+  minsu: { name: '눈깔 레이저', ms: 6700, desc: '6.7초간 눈에서 레이저. 탄창 무한' },
+  sigma: { name: '시그마 각성', ms: 6700, desc: '이동 1.4배, 데미지 1.67배, 탄창 무한' },
+  cat: { name: '냥냥 급습', ms: 6700, desc: '벽 뚫고 날아가 얼굴에 붙어 할큄. 맞는 쪽은 F로 떼어냄' },
+  cone: { name: '오펜하이머', ms: 2600, desc: '조준한 곳에 핵. 2.6초 뒤 터짐. 벽 뒤면 절반' },
+  toilet: { name: '대물내림', ms: 5000, desc: '5초간 주변을 빨아들이고 코앞이면 갈아버림' },
+};
 
 export const EVENTS = {
   dogfight: { name: '🐶✈️ 봄바르디로 도기로 공습!!', ms: 7000, say: 'Bombardiro Doggilo' },

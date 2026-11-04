@@ -109,6 +109,7 @@ export function startServer({ port = 6767, host = '0.0.0.0', timings = {} } = {}
           if (r) r.setSkin(p, m.skin);
           else if (SKIN_IDS.includes(m.skin)) p.skin = m.skin;
           break;
+        case 'map': r?.setMap(p, m.id); break;
         case 'chat': r?.chat(p, m.text); break;
         case 'addBot': r?.addBot(); break;
         case 'removeBot': r?.removeBot(); break;

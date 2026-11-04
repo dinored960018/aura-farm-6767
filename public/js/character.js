@@ -79,6 +79,7 @@ export class Character {
     this.pitch = 0;
     this.emote = 0;
     this.ultra = false;
+    this.ultraKind = null;
     this.bigHead = false;
     this.headScale = 1;
     this.setWeapon('fart');
@@ -192,6 +193,12 @@ export class Character {
     this.crown.visible = false;
     this.head.add(this.crown);
 
+    // 변기 소용돌이
+    this.whirl = mesh(new THREE.TorusGeometry(2.4, 0.16, 6, 28).rotateX(Math.PI / 2), basic(0x2aa8ff, { transparent: true, opacity: 0.75, depthWrite: false }), 0, 0.3, 0);
+    this.whirl2 = mesh(new THREE.TorusGeometry(4.4, 0.12, 6, 32).rotateX(Math.PI / 2), basic(0x8fdcff, { transparent: true, opacity: 0.5, depthWrite: false }), 0, 0.15, 0);
+    this.whirl.visible = this.whirl2.visible = false;
+    this.root.add(this.whirl, this.whirl2);
+
     // 그림자 대신 까만 원
     this.blob = mesh(new THREE.CircleGeometry(0.6, 16).rotateX(-Math.PI / 2), basic(0x000000, { transparent: true, opacity: 0.35, depthWrite: false }), 0, 0.02, 0);
     this.root.add(this.blob);
@@ -272,7 +279,9 @@ export class Character {
     const stiff = 60, damp = 6;
     this.eyeVel += (-stiff * this.eyePop - damp * this.eyeVel) * dt;
     this.eyePop += this.eyeVel * dt;
-    const pop = Math.max(0, this.eyePop);
+    const kind = this.ultra ? this.ultraKind : null;
+    const pop = Math.max(kind === 'minsu' ? 0.4 : 0, this.eyePop);
+    for (const e of this.eyes) e.white.material.color.setHex(kind === 'minsu' ? 0xff2a2a : 0xffffff);
     for (const [i, e] of this.eyes.entries()) {
       const jig = pop * 0.15 * Math.sin(t * 40 + i * 2);
       e.group.position.set(e.base.x + jig, e.base.y + jig * 0.6, e.base.z - pop * 1.2);
@@ -300,7 +309,16 @@ export class Character {
     this.visual.rotation.y = 0;
     this.visual.position.y = moving ? Math.abs(Math.sin(this.walkT)) * 0.07 : 0;
     const farming = this.emote === 1;
-    if (farming) {
+    if (kind === 'cat') {
+      // 앞으로 눕듯이 날아서 양손으로 마구 할퀸다
+      const s = Math.sin(t * 34);
+      this.armL.rotation.set(-2.5 + s * 0.8, 0, 0.3);
+      this.armR.rotation.set(-2.5 - s * 0.8, 0, -0.3);
+      this.visual.rotation.x = -1.05 + Math.sin(t * 19) * 0.08;
+      this.visual.rotation.z = Math.sin(t * 23) * 0.18;
+      this.head.rotation.y = 0;
+    } else if (farming) {
+      this.visual.rotation.x = 0;
       // 뱃머리 소년 춤: 한 손 뻗어 살랑살랑, 몸은 까딱
       this.armR.rotation.set(-2.6 + Math.sin(t * 4.3) * 0.25, 0, -0.4 + Math.sin(t * 8.6) * 0.25);
       this.armL.rotation.set(0.25, 0, 0.75 + Math.sin(t * 4.3) * 0.15);
@@ -309,27 +327,36 @@ export class Character {
     } else if (this.emote === 2) {
       // 6-7: 양손을 저울처럼 번갈아 위아래
       const s = Math.sin(t * 11);
+      this.visual.rotation.x = 0;
       this.armL.rotation.set(-1.55 + s * 0.55, 0, 0.15);
       this.armR.rotation.set(-1.55 - s * 0.55, 0, -0.15);
       this.visual.rotation.z = s * 0.04;
       this.head.rotation.y = 0;
     } else {
+      this.visual.rotation.x = 0;
       this.armR.rotation.set(-1.45 - this.pitch * 0.9, 0, 0);
       this.armL.rotation.set(-1.2 - this.pitch * 0.9, 0, 0.5);
       this.visual.rotation.z = 0;
       this.head.rotation.y = 0;
     }
-    this.gun.visible = this.emote === 0;
+    this.gun.visible = this.emote === 0 && kind !== 'cat' && kind !== 'minsu';
+    if (kind === 'toilet') this.visual.rotation.y = t * 11;
+    this.whirl.visible = this.whirl2.visible = kind === 'toilet';
+    if (kind === 'toilet') {
+      this.whirl.rotation.y = t * 9;
+      this.whirl.scale.setScalar(0.7 + ((t * 1.4) % 1) * 0.7);
+      this.whirl2.scale.setScalar(1.5 - ((t * 0.9) % 1) * 0.8);
+    }
 
     // 아우라
-    const auraOn = farming || this.ultra;
+    const auraOn = farming || kind === 'sigma' || kind === 'cone';
     this.shades.visible = auraOn;
-    this.crown.visible = this.ultra;
+    this.crown.visible = kind === 'sigma';
     const wantGlow = this.ultra ? 0.6 : farming ? 0.38 : 0;
     this.glow.material.opacity += (wantGlow - this.glow.material.opacity) * Math.min(1, dt * 6);
     const gs = 3.2 + Math.sin(t * 7) * 0.35;
     this.glow.scale.set(gs, gs * 1.25, 1);
-    const scale = this.ultra ? 1.3 : 1;
+    const scale = kind === 'sigma' ? 1.3 : kind === 'cat' ? 1.15 : 1;
     this.visual.scale.setScalar(scale);
   }
 

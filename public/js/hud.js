@@ -1,5 +1,5 @@
 // 경기 화면 위 DOM 연출 전부. 이름 같은 값은 textContent로만 넣는다.
-import { AURA_MAX, WEAPONS, WIN_KILLS } from '/shared/constants.js';
+import { AURA_MAX, WEAPONS, ULTRAS } from '/shared/constants.js';
 import { WEAPON_LABEL, pick } from './memes.js';
 
 const $ = (id) => document.getElementById(id);
@@ -9,12 +9,13 @@ export class Hud {
     this.names = new Map();
     this.el = {
       root: $('hud'), hpBar: $('hpBar'), hpText: $('hpText'), auraBar: $('auraBar'), auraText: $('auraText'),
-      scoreMe: $('scoreMe'), scoreEnemy: $('scoreEnemy'), nameMe: $('nameMe'), nameEnemy: $('nameEnemy'), timer: $('timer'),
+      chips: $('scoreChips'), timer: $('timer'),
       weapon: $('weaponName'), ammo: $('ammo'), reload: $('reloadText'), cross: $('crosshair'), hit: $('hitmarker'),
       big: $('bigCount'), feed: $('killfeed'), shout: $('shout'), aura: $('auraPops'), eyes: $('bigEyes'),
       vignette: $('vignette'), lock: $('lockHint'), cut: $('killCut'), cutText: $('killCutText'), death: $('death'),
       deathLine: $('deathLine'), deathBy: $('deathBy'), deathBar: $('deathBar'), event: $('eventBanner'),
-      ultra: $('ultraFrame'), ultraReady: $('ultraReady'), rain: $('rain'), dir: $('damageDir'), six: $('sixSeven'),
+      ultra: $('ultraFrame'), ultraLabel: $('ultraLabel'), ultraReady: $('ultraReady'), claws: $('claws'), grab: $('grabFace'),
+      oppen: $('oppen'), oppenBy: $('oppenBy'), flash: $('nukeFlash'), rain: $('rain'), dir: $('damageDir'), six: $('sixSeven'),
     };
     this.prev = {};
   }
@@ -31,12 +32,10 @@ export class Hud {
     this.el.vignette.className = '';
     document.getElementById('hudGameLayer').hidden = false;
     this.setUltra(false);
+    this.setGrabbed(false);
+    this.el.oppen.hidden = true;
+    this.el.chips.replaceChildren();
     this.show(true);
-  }
-
-  setNames(me, enemy) {
-    this.el.nameMe.textContent = me;
-    this.el.nameEnemy.textContent = enemy;
   }
 
   setLockHint(v) { this.el.lock.hidden = !v; }
@@ -73,21 +72,21 @@ export class Hud {
       e.auraText.textContent = `AURA ${g.aura.toLocaleString()} / ${AURA_MAX.toLocaleString()}`;
       const full = g.aura >= AURA_MAX;
       e.ultraReady.hidden = !full;
+      if (full) e.ultraReady.textContent = `E 눌러서 ${ULTRAS[g.me?.skinId]?.name ?? '각성'}`;
       e.auraBar.classList.toggle('full', full);
     }
-    this.setText('sm', e.scoreMe, String(g.kills));
-    this.setText('se', e.scoreEnemy, String(g.enemyKills));
+    this.renderScores(g);
     const s = Math.ceil(g.timeLeft / 1000);
     this.setText('timer', e.timer, `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`);
     const w = WEAPONS[g.weapon];
-    this.setText('ammo', e.ammo, g.ultra ? '∞ / 6767' : `${g.ammo[w.id]} / ${w.mag}`);
+    this.setText('ammo', e.ammo, g.infAmmo() ? '∞ / 6767' : `${g.ammo[w.id]} / ${w.mag}`);
     const rel = g.reloadT > 0;
     if (this.prev.rel !== rel) {
       this.prev.rel = rel;
       e.reload.hidden = !rel;
       if (rel) e.reload.textContent = pick(['장전 중 ㅋㅋ', '잠깐만요', '콩콩콩', 'loading...', '총알 사러 감']);
     }
-    const hideCross = !!g.emote || !g.alive;
+    const hideCross = !!g.emote || !g.alive || g.forced;
     if (this.prev.hideCross !== hideCross) {
       this.prev.hideCross = hideCross;
       e.cross.hidden = hideCross;
@@ -97,6 +96,24 @@ export class Hud {
       this.prev.spread = spread;
       e.cross.style.setProperty('--gap', `${spread}px`);
     }
+  }
+
+  // 위쪽 점수판: 킬 순서대로
+  renderScores(g) {
+    const rows = [...g.scores].sort((a, b) => b.k - a.k);
+    const key = rows.map((r) => `${r.id}:${r.k}`).join(',');
+    if (this.prev.scores === key) return;
+    this.prev.scores = key;
+    this.el.chips.replaceChildren(...rows.map((r) => {
+      const chip = document.createElement('div');
+      chip.className = `chip${r.id === g.myId ? ' me' : ''}`;
+      const n = document.createElement('span');
+      n.textContent = this.names.get(r.id) ?? '???';
+      const b = document.createElement('b');
+      b.textContent = r.k;
+      chip.append(n, b);
+      return chip;
+    }));
   }
 
   hitmarker(head) {
@@ -205,8 +222,38 @@ export class Hud {
     this.eventTimer = setTimeout(() => { e.hidden = true; }, ms);
   }
 
-  setUltra(on, ms) {
+  // 고양이에게 할퀴일 때 화면에 긁힌 자국
+  claws() {
+    const s = document.createElement('i');
+    s.style.left = `${10 + Math.random() * 62}%`;
+    s.style.top = `${8 + Math.random() * 50}%`;
+    s.style.setProperty('--r', `${Math.random() * 60 - 30}deg`);
+    this.el.claws.append(s);
+    while (this.el.claws.children.length > 14) this.el.claws.firstChild.remove();
+    setTimeout(() => s.remove(), 1100);
+  }
+
+  setGrabbed(on) {
+    this.el.grab.hidden = !on;
+    if (!on) this.el.claws.replaceChildren();
+  }
+
+  oppenheimer(ms, by) {
+    const e = this.el;
+    e.oppenBy.textContent = by ? `${by}: 핵 쐈다. 벽 뒤로 숨어라` : '핵 발사. 넌 방사능 면역임';
+    e.oppen.hidden = false;
+    clearTimeout(this.oppenTimer);
+    this.oppenTimer = setTimeout(() => { e.oppen.hidden = true; }, ms);
+  }
+
+  nukeFlash() {
+    this.el.oppen.hidden = true;
+    this.restart(this.el.flash, 'show');
+  }
+
+  setUltra(on, ms, name) {
     this.el.ultra.hidden = !on;
+    if (name) this.el.ultraLabel.textContent = name;
     clearTimeout(this.ultraTimer);
     if (on) this.ultraTimer = setTimeout(() => { this.el.ultra.hidden = true; }, ms);
   }
@@ -226,4 +273,3 @@ export class Hud {
   }
 }
 
-export { WIN_KILLS };

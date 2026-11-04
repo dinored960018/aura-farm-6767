@@ -14,14 +14,21 @@
 <!-- 경기 화면 -->
 <div id="hud" hidden>
   <div id="vignette"></div>
-  <div id="ultraFrame" hidden><span>SIGMA MODE</span></div>
+  <div id="ultraFrame" hidden><span id="ultraLabel">SIGMA MODE</span></div>
+  <div id="claws"></div>
+  <div id="grabFace" hidden>😼</div>
+  <div id="nukeFlash"></div>
+  <div id="oppen" hidden>
+    <div class="bar-top"></div>
+    <div class="bar-bottom">
+      <p>이제 나는 죽음이요, 세계의 파괴자가 되었다</p>
+      <small id="oppenBy"></small>
+    </div>
+  </div>
   <div id="hudGameLayer">
     <div id="scoreBox">
-      <span id="nameMe">나</span>
-      <b id="scoreMe">0</b>
       <div id="timerBox"><small>먼저 7킬</small><i id="timer">6:07</i></div>
-      <b id="scoreEnemy">0</b>
-      <span id="nameEnemy">상대</span>
+      <div id="scoreChips"></div>
     </div>
     <div id="killfeed"></div>
     <div id="eventBanner" hidden></div>
@@ -78,7 +85,7 @@
 <section id="home" class="panelScreen" hidden>
   <header class="logo">
     <h1><span>AURA FARM</span><em>6767</em></h1>
-    <p>1대1 눈깔 적출 FPS</p>
+    <p>최대 4인 눈깔 적출 FPS</p>
   </header>
   <div class="card">
     <label>닉네임<input id="nameInput" maxlength="12" placeholder="익명의 NPC" autocomplete="off"></label>
@@ -103,11 +110,15 @@
     <div id="slots"></div>
     <button id="readyBtn" class="primary big">준비</button>
     <div class="row">
-      <button id="botBtn" class="ghost">🤖 봇 부르기</button>
-      <button id="copyBtn" class="ghost">🔗 <span id="hostHint"></span></button>
+      <button id="botBtn" class="ghost">🤖 봇+</button>
+      <button id="botOutBtn" class="ghost">봇−</button>
+      <button id="copyBtn" class="ghost" title="주소 복사">🔗 복사</button>
     </div>
+    <h3>맵</h3>
+    <div id="mapPick"></div>
     <h3>내 캐릭터</h3>
     <div id="skinPick"></div>
+    <p id="skinDesc"></p>
   </div>
   <div class="card side right">
     <h3>채팅</h3>
@@ -119,7 +130,8 @@
       <li><b>좌클릭</b> 발사 · <b>우클릭</b> 줌 · <b>R</b> 장전 · <b>1 2 3</b> 무기</li>
       <li><b>F</b> 싸대기 (67 데미지, 날려버림)</li>
       <li><b>G 꾹</b> 아우라 파밍 · <b>T 꾹</b> 6-7</li>
-      <li>아우라 6,767 채우고 <b>E</b> = 시그마 각성</li>
+      <li>아우라 6,767 채우고 <b>E</b> = 캐릭터별 각성</li>
+      <li>2~4명 개인전. 전원 준비하면 시작, 먼저 7킬</li>
     </ul>
   </div>
 </section>

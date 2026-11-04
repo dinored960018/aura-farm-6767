@@ -1,9 +1,9 @@
 // 3D 세계와 1인칭 조작. 서버 메시지를 받아 눈깔을 튀어나오게 한다.
 import * as THREE from 'three';
 import {
-  WEAPONS, MOVE, PLAYER, SLAP, BOMB, EVENTS, AURA_MAX, INTERP_MS, MATCH_SECONDS, TICK_HZ,
+  WEAPONS, LASER, ULTRAS, MOVE, PLAYER, SLAP, BOMB, EVENTS, AURA_MAX, INTERP_MS, MATCH_SECONDS, TICK_HZ,
 } from '/shared/constants.js';
-import { BOXES, JUMP_PADS, PICKUPS, FALL_Y, rayWorld, rayPlayer, HITBOX } from '/shared/map.js';
+import { MAPS, DEFAULT_MAP, rayWorld, rayPlayer } from '/shared/map.js';
 import { newBody, stepBodyFixed } from '/shared/physics.js';
 import { Character, glowTexture } from './character.js';
 import { Effects, textTexture } from './effects.js';
@@ -18,13 +18,20 @@ const lerpAngle = (a, b, k) => {
   return a + d * k;
 };
 
-function gridTexture(base, line, { size = 256, label = null, checker = false } = {}) {
+function gridTexture({ base, line, label = null, checker = false, windows = false }, size = 256) {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const x = c.getContext('2d');
   x.fillStyle = base;
   x.fillRect(0, 0, size, size);
-  if (checker) {
+  if (windows) {
+    for (let i = 0; i < 6; i++) {
+      for (let j = 0; j < 6; j++) {
+        x.fillStyle = (i * 7 + j * 13) % 5 < 2 ? line : '#15172b';
+        x.fillRect(i * size / 6 + 8, j * size / 6 + 8, size / 6 - 16, size / 6 - 16);
+      }
+    }
+  } else if (checker) {
     x.fillStyle = line;
     x.fillRect(0, 0, size / 2, size / 2);
     x.fillRect(size / 2, size / 2, size / 2, size / 2);
@@ -105,12 +112,17 @@ export class Game {
 
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.Fog(0x4a1b6d, 45, 150);
+    this.hemi = new THREE.HemisphereLight(0xffffff, 0x333333, 2);
+    this.sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    this.sunLight.position.set(20, 40, 12);
+    this.scene.add(this.hemi, this.sunLight);
     this.camera = new THREE.PerspectiveCamera(78, 16 / 9, 0.08, 500);
     this.camera.rotation.order = 'YXZ';
     this.scene.add(this.camera);
 
     this.effects = new Effects(this.scene);
-    this.buildWorld();
+    this.effects.camera = this.camera;
+    this.loadMap(DEFAULT_MAP);
     this.buildViewmodels();
 
     this.chars = new Map();
@@ -138,8 +150,6 @@ export class Game {
     this.alive = true;
     this.frozen = true;
     this.me = null;
-    this.enemy = null;
-    this.enemyId = null;
     this.weapon = 'fart';
     this.ammo = emptyAmmo();
     this.cooldown = 0;
@@ -150,14 +160,19 @@ export class Game {
     this.lastEmote = 0;
     this.emote = 0;
     this.ultra = false;
+    this.ultraKind = null;
+    this.forced = false;
+    this.grabbedBy = null;
+    this.musicHold = 0;
+    this.cineUntil = 0;
+    this.cinePos = null;
     this.aura = 0;
     this.hp = 100;
     this.kills = 0;
-    this.enemyKills = 0;
+    this.scores = [];
     this.timeLeft = MATCH_SECONDS * 1000;
     this.eventKind = null;
     this.stepAcc = 0;
-    this.enemyStepAcc = 0;
     this.deadCamT = 0;
     this.lastMemeAt = 0;
     this.killerId = null;
@@ -169,84 +184,85 @@ export class Game {
   }
 
   // ---------- 세계 ----------
-  buildWorld() {
-    const s = this.scene;
-    s.add(new THREE.HemisphereLight(0xffe0f0, 0x31206b, 2.1));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.5);
-    sun.position.set(20, 40, 12);
-    s.add(sun);
+  loadMap(id) {
+    if (this.mapId === id && this.world) return;
+    if (this.world) {
+      this.scene.remove(this.world);
+      this.world.traverse((o) => {
+        o.geometry?.dispose();
+        o.material?.dispose?.();
+      });
+      for (const t of this.worldTextures) t.dispose();
+    }
+    this.mapId = id;
+    this.map = MAPS[id] ?? MAPS[DEFAULT_MAP];
+    this.effects.map = this.map;
+    this.world = new THREE.Group();
+    this.worldTextures = [];
+    this.scene.add(this.world);
+    this.buildWorld(this.map);
+  }
 
-    // 하늘: 싸구려 베이퍼웨이브
+  buildWorld(map) {
+    const s = this.world;
+    const th = map.theme;
+    const own = (t) => { this.worldTextures.push(t); return t; };
+    this.scene.fog.color.setHex(th.fog[0]);
+    this.scene.fog.near = th.fog[1];
+    this.scene.fog.far = th.fog[2];
+    this.hemi.color.setHex(th.hemi[0]);
+    this.hemi.groundColor.setHex(th.hemi[1]);
+    this.hemi.intensity = th.hemi[2];
+    this.sunLight.intensity = th.sun;
+
     const sky = document.createElement('canvas');
     sky.width = 16; sky.height = 512;
     const sx = sky.getContext('2d');
     const g = sx.createLinearGradient(0, 0, 0, 512);
-    g.addColorStop(0, '#12062e');
-    g.addColorStop(0.45, '#7a1fa2');
-    g.addColorStop(0.56, '#ff4fa3');
-    g.addColorStop(0.62, '#ffb347');
-    g.addColorStop(1, '#25083f');
+    for (const [stop, col] of th.sky) g.addColorStop(stop, col);
     sx.fillStyle = g;
     sx.fillRect(0, 0, 16, 512);
-    const skyTex = new THREE.CanvasTexture(sky);
+    const skyTex = own(new THREE.CanvasTexture(sky));
     skyTex.colorSpace = THREE.SRGBColorSpace;
     s.add(new THREE.Mesh(
       new THREE.SphereGeometry(300, 24, 16),
       new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false }),
     ));
 
-    const textures = {
-      floor: gridTexture('#3b2e6e', '#46367f', { checker: true, label: '67' }),
-      wall: gridTexture('#ff5c95', '#c7215f'),
-      crate: gridTexture('#ffc233', '#b57a00'),
-      plat: gridTexture('#2ad3d7', '#07898c'),
-      step: gridTexture('#8d63ff', '#5a2fd1'),
-      bridge: gridTexture('#46e063', '#1d8c34', { checker: false }),
-    };
-    const lam = (map) => new THREE.MeshLambertMaterial({ map });
-    const mats = {
-      0x3b2e6e: lam(textures.floor), 0xff3d81: lam(textures.wall), 0xffb400: lam(textures.crate),
-      0x18c5c9: lam(textures.plat), 0x7c4dff: lam(textures.step), 0x39d353: lam(textures.bridge),
-    };
-    for (const b of BOXES) {
+    const mats = {};
+    for (const [kind, def] of Object.entries(th.tex)) mats[kind] = new THREE.MeshLambertMaterial({ map: own(gridTexture(def)) });
+    mats.lamp = new THREE.MeshBasicMaterial({ color: 0xfffff0 });
+    for (const b of map.boxes) {
       const tile = b.floor ? 4 : b.wall ? 6 : 2;
-      s.add(boxMesh(b, mats[b.color], tile));
+      s.add(boxMesh(b, mats[b.kind], tile));
     }
+    for (const b of map.decor) s.add(boxMesh(b, mats[b.kind], b.kind === 'city' ? 8 : 2));
 
-    // 벽 광고판
-    const signs = [
-      [['6767'], '#000', '#ffee00', [0, 8, -27.97], 0, 20],
-      [['ONLY IN', 'OHIO'], '#14002e', '#ff5f1f', [0, 8, 27.97], Math.PI, 20],
-      [['SKILL', 'ISSUE'], '#fff', '#e00', [-27.97, 8, -12], Math.PI / 2, 16],
-      [['SIGMA', '🗿 GRINDSET'], '#111', '#fff', [-27.97, 8, 12], Math.PI / 2, 16],
-      [['어쩔티비', '저쩔티비'], '#00154a', '#00e5ff', [27.97, 8, -12], -Math.PI / 2, 16],
-      [['AURA', '+6767'], '#2a1a00', '#ffd700', [27.97, 8, 12], -Math.PI / 2, 16],
-    ];
-    for (const [lines, bg, fg, pos, rot, w] of signs) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 2), new THREE.MeshBasicMaterial({ map: bannerTexture(lines, bg, fg), fog: false }));
+    for (const [lines, bg, fg, pos, rot, w] of th.signs) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 2), new THREE.MeshBasicMaterial({ map: own(bannerTexture(lines, bg, fg)), fog: false }));
       m.position.set(...pos);
       m.rotation.y = rot;
       s.add(m);
     }
 
-    // 구멍 바닥: 오하이오
-    const pit = new THREE.Mesh(
-      new THREE.PlaneGeometry(14, 14).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ map: bannerTexture(['OHIO', '↓↓↓'], '#3a0000', '#ff3b00'), fog: false }),
-    );
-    pit.position.y = -16;
-    s.add(pit);
+    if (th.pit) {
+      const pit = new THREE.Mesh(
+        new THREE.PlaneGeometry(th.pit.size, th.pit.size).rotateX(-Math.PI / 2),
+        new THREE.MeshBasicMaterial({ map: own(bannerTexture(th.pit.lines, th.pit.bg, th.pit.fg)), fog: false }),
+      );
+      pit.position.set(...th.pit.pos);
+      s.add(pit);
+    }
 
-    // 공중에 도는 67
     const tex = textTexture('67', { color: '#ffe600', stroke: '#ff0080', size: 200 });
     this.big67 = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, fog: false }));
     this.big67.scale.set(tex.userData.aspect * 9, 9, 1);
-    this.big67.position.set(0, 15.5, 0);
+    this.big67.position.set(...th.big67);
+    this.big67.userData.baseY = th.big67[1];
     s.add(this.big67);
 
-    // 점프대
     this.padMeshes = [];
-    for (const p of JUMP_PADS) {
+    for (const p of map.pads) {
       const m = new THREE.Mesh(
         new THREE.CylinderGeometry(p.radius, p.radius * 1.1, 0.14, 24),
         new THREE.MeshBasicMaterial({ color: 0xffee00 }),
@@ -262,9 +278,8 @@ export class Game {
       this.padMeshes.push(arrow);
     }
 
-    // 픽업
     const chickenTex = textTexture('🍗', { stroke: null, size: 128, font: '"Segoe UI Emoji", sans-serif' });
-    this.pickupMeshes = PICKUPS.map((p) => {
+    this.pickupMeshes = map.pickups.map((p) => {
       let m;
       if (p.kind === 'chicken') {
         m = new THREE.Sprite(new THREE.SpriteMaterial({ map: chickenTex, transparent: true }));
@@ -426,26 +441,27 @@ export class Game {
 
   startReload() {
     const w = WEAPONS[this.weapon];
-    if (this.reloadT > 0 || this.ammo[w.id] >= w.mag || !this.alive || this.ultra) return;
+    if (this.reloadT > 0 || this.ammo[w.id] >= w.mag || !this.alive || this.infAmmo() || this.forced) return;
     this.reloadT = w.reload;
     this.sfx.reload();
   }
 
   // ---------- 대기실 배경 ----------
-  setAttract(players) {
+  setAttract(players, mapId) {
     this.mode = 'attract';
+    if (mapId) this.loadMap(mapId);
     if (players.length === 0) players = [{ id: 'demo1', skin: 'sigma' }, { id: 'demo2', skin: 'cat' }];
     this.syncChars(players, true);
     const list = [...this.chars.values()];
-    const spots = [[-1.25, 0, 0], [1.25, 0, 0]];
+    const c0 = this.map.showcase.pos;
     list.forEach((c, i) => {
-      const [x, y, z] = spots[i] ?? spots[0];
-      c.root.position.set(x, y, z);
+      c.root.position.set(c0[0] + (i - (list.length - 1) / 2) * 1.75, c0[1], c0[2]);
       c.lastPos.copy(c.root.position);
       c.root.rotation.y = 0;
       c.pitch = 0;
-      c.emote = i === 0 ? 2 : 1;
+      c.emote = i % 2 === 0 ? 2 : 1;
       c.ultra = false;
+      c.ultraKind = null;
       c.bigHead = false;
       c.respawn();
       c.setVisibleBody(true);
@@ -487,16 +503,15 @@ export class Game {
     this.resetMatchState();
     this.myId = myId;
     this.mode = 'match';
+    this.loadMap(m.map);
     this.syncChars(m.players, false);
     this.me = this.chars.get(myId);
-    const op = m.players.find((p) => p.id !== myId);
-    this.enemyId = op?.id ?? null;
-    this.enemy = this.chars.get(this.enemyId);
     for (const p of m.players) {
       const c = this.chars.get(p.id);
       c.respawn();
       c.emote = 0;
       c.ultra = false;
+      c.ultraKind = null;
       c.bigHead = false;
       c.root.position.set(...p.pos);
       c.root.rotation.y = p.yaw;
@@ -530,6 +545,13 @@ export class Game {
     this.sfx.stopMusic();
   }
 
+  // 경기 중 누가 나갔을 때
+  onRoster(players) {
+    if (this.mode !== 'match') return;
+    this.syncChars(players, false);
+    for (const id of [...this.buffers.keys()]) if (!this.chars.has(id)) this.buffers.delete(id);
+  }
+
   onGo() {
     this.frozen = false;
     this.hud.bigCount('');
@@ -555,6 +577,7 @@ export class Game {
 
   onSnap(m) {
     this.timeLeft = m.left;
+    this.scores = m.players.map((s) => ({ id: s.id, k: s.k }));
     for (const s of m.players) {
       const mine = s.id === this.myId;
       if (mine) {
@@ -563,8 +586,11 @@ export class Game {
         this.aura = s.aura;
         this.kills = s.k;
         this.invuln = s.inv;
+        if (this.forced) {
+          this.body.x = s.p[0]; this.body.y = s.p[1]; this.body.z = s.p[2];
+          this.body.vx = this.body.vy = this.body.vz = 0;
+        }
       } else {
-        this.enemyKills = s.k;
         let buf = this.buffers.get(s.id);
         if (!buf) this.buffers.set(s.id, (buf = []));
         buf.push({ t: m.s, ...s });
@@ -583,8 +609,8 @@ export class Game {
     }
   }
 
-  enemyRender() {
-    const buf = this.buffers.get(this.enemyId);
+  renderOf(id) {
+    const buf = this.buffers.get(id);
     if (!buf || !buf.length) return null;
     const t = this.net.serverNow() - INTERP_MS;
     let a = buf[0], b = buf[buf.length - 1];
@@ -610,8 +636,8 @@ export class Game {
   }
 
   onShot(m) {
-    const color = { fart: 0x9be02a, six7: 0xffe600, boom: 0xff3d81 }[m.w];
-    for (const end of m.ends) this.effects.tracer(m.o, end, color, m.w === 'six7' ? 0.08 : 0.04, 0.12);
+    const color = { fart: 0x9be02a, six7: 0xffe600, boom: 0xff3d81, laser: 0xff1133 }[m.w];
+    for (const end of m.ends) this.effects.tracer(m.o, end, color, m.w === 'six7' || m.w === 'laser' ? 0.08 : 0.04, 0.12);
     this.sfx.shoot(m.w, true);
     if (m.w === 'fart' && this.camera.position.distanceTo(new THREE.Vector3(...m.o)) > 5) this.effects.cloud(m.o, 2);
     if (m.w === 'six7' && this.camera.position.distanceTo(new THREE.Vector3(...m.ends[0])) > 7) {
@@ -635,12 +661,20 @@ export class Game {
     const strength = m.head ? 1.6 : m.dmg >= 20 ? 1.2 : 0.7;
     if (c) c.pop(strength);
     if (m.weapon === 'slap') this.sfx.slap();
-    if (mine) {
+    if (m.weapon === 'claw') {
+      this.sfx.scratch();
+      this.effects.text([m.pos[0], m.pos[1] + 2.1, m.pos[2]], pick(['냥!', '할퀴기!', '💢', '🐾', '캬악']), { color: '#ff4d6d', scale: 0.9, life: 0.45 });
+      if (Math.random() < 0.18) this.sfx.meow();
+    }
+    if (mine && m.weapon === 'claw') {
+      this.shake = Math.min(1, this.shake + 0.14);
+      this.hud.claws();
+    } else if (mine) {
       this.shake = Math.min(1, this.shake + (m.head ? 0.8 : 0.3 + m.dmg / 120));
       this.hud.eyePop(m.head || m.dmg >= 30);
       this.sfx.eyePop(m.head || m.dmg >= 30);
       if (m.head) this.sfx.metalPipe();
-      const from = this.buffers.get(this.enemyId)?.at(-1)?.p;
+      const from = this.buffers.get(m.from)?.at(-1)?.p;
       if (from && m.from) {
         const ang = Math.atan2(from[0] - this.body.x, from[2] - this.body.z);
         this.hud.damageDir(ang - this.yaw + Math.PI);
@@ -654,7 +688,7 @@ export class Game {
       this.effects.text(pos, `-${m.dmg}`, { color: m.head ? '#ffdd00' : '#ffffff', scale: m.head ? 1.3 : 0.8, life: 0.8 });
       if (m.head) this.effects.text(pos, pick(['💀', '👁️', '🫨', '🤯']), { scale: 1.5, life: 0.8, spin: 3, stroke: null });
       if (m.weapon === 'slap') this.effects.text(pos, '찰싹!!', { color: '#ff4d6d', scale: 1.6, life: 0.8 });
-    } else if (c && !mine) {
+    } else if (c && !mine && m.weapon !== 'claw') {
       this.sfx.bonk();
     }
   }
@@ -678,7 +712,8 @@ export class Game {
       this.effects.text([m.pos[0], m.pos[1] + 2.6, m.pos[2]], pick(KILL_LINES), { color: '#ff2a6d', scale: 1.5, life: 1.8, rise: 1 });
       this.effects.cloud([m.pos[0], m.pos[1] + 1.2, m.pos[2]], 10, 0xff3355);
     }
-    this.hud.killFeed(m, this.nameOf(m.killer), this.nameOf(m.victim));
+    const killerName = m.killer != null ? this.nameOf(m.killer) : m.weapon === 'bomb' ? '🐶 개 전투기' : '중력';
+    this.hud.killFeed(m, killerName, this.nameOf(m.victim));
 
     if (got) {
       if (iKilled) {
@@ -706,7 +741,8 @@ export class Game {
       if (this.me?.tag) this.me.tag.visible = false;
       this.ultraOff();
       const line = pick(m.weapon === 'fall' ? FALL_LINES : DEATH_LINES);
-      this.hud.deathScreen(line, this.nameOf(m.killer), m.weapon, m.respawnMs);
+      this.setGrabbed(null);
+      this.hud.deathScreen(line, killerName, m.weapon, m.respawnMs);
       this.sfx.sadTrombone();
       this.sfx.bigFart();
       this.meme(line, true);
@@ -715,7 +751,7 @@ export class Game {
   }
 
   nameOf(id) {
-    return this.hud.names.get(id) ?? '???';
+    return this.hud.names.get(id) ?? '나간 사람';
   }
 
   meme(text, force = false) {
@@ -738,6 +774,7 @@ export class Game {
       this.yaw = m.yaw;
       this.pitch = 0;
       this.alive = true;
+      this.forced = false;
       this.ammo = emptyAmmo();
       this.reloadT = 0;
       this.canvas.classList.remove('dead');
@@ -770,28 +807,118 @@ export class Game {
 
   ultraOff() {
     if (!this.ultra) return;
+    const wasLaser = this.ultraKind === 'minsu';
     this.ultra = false;
+    this.ultraKind = null;
+    this.forced = false;
     this.hud.setUltra(false);
+    if (wasLaser) this.hud.setWeapon(WEAPONS[this.weapon]);
+    this.setHudVisible(this.alive);
+  }
+
+  infAmmo() { return this.ultraKind === 'sigma' || this.ultraKind === 'minsu'; }
+  curWeapon() { return this.ultraKind === 'minsu' ? LASER : WEAPONS[this.weapon]; }
+
+  setGrabbed(id) {
+    this.grabbedBy = id;
+    this.hud.setGrabbed(id !== null);
+  }
+
+  onTeleport(m) {
+    this.body = newBody(...m.pos);
+    this.forced = false;
+  }
+
+  // 고양이가 누군가의 얼굴에 붙거나 떨어졌을 때
+  onCat(m) {
+    if (m.to === this.myId) {
+      this.setGrabbed(m.id);
+      this.hud.shout('얼굴에 고양이 붙음!! F로 떼어내', 'red');
+      this.sfx.meow();
+      this.sfx.say('냥', { lang: 'ko-KR', pitch: 2, rate: 1.4 });
+    } else if (m.to === null && this.grabbedBy === m.id) {
+      this.setGrabbed(null);
+    }
+    if (m.id === this.myId && m.to !== null) this.sfx.meow();
+  }
+
+  // 오펜하이머: 위로 올라가는 현악기 → 번쩍 → 잠깐 정적 → 쾅
+  onNuke(m) {
+    const mine = m.id === this.myId;
+    this.effects.warning(m.pos, m.radius, m.in, '☢️', 5);
+    this.sfx.stopMusic();
+    this.musicHold = performance.now() + m.in + 3500;
+    this.sfx.nukeWind(m.in);
+    this.sfx.say('Now I am become death, the destroyer of worlds', { pitch: 0.1, rate: 0.72 });
+    this.hud.oppenheimer(m.in, mine ? null : this.nameOf(m.id));
+  }
+
+  onNukeBoom(m) {
+    this.effects.mushroom(m.pos, m.radius);
+    this.hud.nukeFlash();
+    this.cineUntil = performance.now() + 2400;
+    this.cinePos = m.pos;
+    this.mouseDown = false;
+    this.fovKick = 30;
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    const d = Math.hypot(this.body.x - m.pos[0], this.body.z - m.pos[2]);
+    // 빛이 먼저, 소리는 나중에
+    setTimeout(() => {
+      this.sfx.nukeBoom();
+      if (this.mode === 'match') this.shake = Math.min(1, this.shake + Math.max(0.5, 1 - d / 60));
+    }, 950);
+  }
+
+  ultraIntro(kind, ms) {
+    if (kind === 'sigma') {
+      this.sfx.vineBoom();
+      this.sfx.sparkle();
+      this.sfx.say('sigma', { pitch: 0.1, rate: 0.6 });
+    } else if (kind === 'minsu') {
+      this.sfx.boing(true);
+      this.sfx.say('눈깔 레이저', { lang: 'ko-KR', pitch: 0.2, rate: 0.8 });
+    } else if (kind === 'cat') {
+      this.sfx.meow();
+      this.sfx.say('냥냥 급습', { lang: 'ko-KR', pitch: 1.9, rate: 1.3 });
+    } else if (kind === 'toilet') {
+      this.sfx.flush(ms);
+      this.sfx.say('flush', { pitch: 0.1, rate: 0.5 });
+    }
   }
 
   onUltra(m) {
     const c = this.chars.get(m.id);
-    if (c) c.ultra = m.on;
+    if (c) {
+      c.ultra = m.on;
+      c.ultraKind = m.on ? m.kind : null;
+    }
     if (m.id === this.myId) {
       if (m.on) {
         this.ultra = true;
-        this.reloadT = 0;
-        this.hud.setUltra(true, m.ms);
-        this.hud.shout('시그마 각성', 'gold');
-        this.sfx.vineBoom();
-        this.sfx.sparkle();
-        this.sfx.say('sigma', { pitch: 0.1, rate: 0.6 });
+        this.ultraKind = m.kind;
+        this.emote = 0;
+        const def = ULTRAS[m.kind];
+        this.hud.setUltra(true, m.ms, def.name);
         this.fovKick = 22;
+        if (this.infAmmo()) this.reloadT = 0;
+        if (m.kind === 'cat') {
+          this.forced = true;
+          this.reloadT = 0;
+          this.setHudVisible(false);
+        }
+        if (m.kind === 'minsu') {
+          this.setHudVisible(false);
+          this.hud.setWeapon(LASER);
+        }
+        if (m.kind !== 'cone') this.hud.shout(def.name, 'gold');
+        this.ultraIntro(m.kind, m.ms);
       } else this.ultraOff();
     } else if (m.on) {
-      this.hud.shout(`${this.nameOf(m.id)} 각성함 도망쳐`, 'red');
-      this.sfx.airhorn();
+      if (m.kind !== 'cone') this.hud.shout(`${this.nameOf(m.id)}: ${ULTRAS[m.kind].name} 도망쳐`, 'red');
+      this.ultraIntro(m.kind, m.ms);
+      if (m.kind === 'sigma') this.sfx.airhorn();
     }
+    if (!m.on && this.grabbedBy === m.id) this.setGrabbed(null);
   }
 
   onEvent(m) {
@@ -864,36 +991,49 @@ export class Game {
   }
 
   tryFire() {
-    const w = WEAPONS[this.weapon];
-    if (this.frozen || !this.alive || this.cooldown > 0 || this.reloadT > 0 || this.slapT > 0.12) return;
+    const w = this.curWeapon();
+    if (performance.now() < this.cineUntil) return;
+    if (this.forced || this.frozen || !this.alive || this.cooldown > 0 || this.reloadT > 0 || this.slapT > 0.12) return;
     if (this.emote) return;
-    if (this.ammo[w.id] <= 0 && !this.ultra) {
+    const inf = this.infAmmo();
+    if (!inf && this.ammo[w.id] <= 0) {
       this.sfx.dry();
       this.startReload();
       return;
     }
-    if (!this.ultra) this.ammo[w.id]--;
-    this.cooldown = w.interval * (this.ultra ? 0.6 : 1);
+    if (!inf) this.ammo[w.id]--;
+    this.cooldown = w.interval * (this.ultraKind === 'sigma' ? 0.6 : 1);
     this.recoil = Math.min(1.5, this.recoil + (w.id === 'fart' ? 0.28 : 1));
-    const kick = { fart: 0.002, six7: 0.018, boom: 0.03 }[w.id];
+    const kick = { fart: 0.002, six7: 0.018, boom: 0.03, laser: 0 }[w.id];
     this.pitch = clamp(this.pitch + kick, -1.5, 1.5);
 
     const o = [this.camera.position.x, this.camera.position.y, this.camera.position.z];
     const dirs = this.fireDirs(w);
     this.net.send({ t: 'shoot', w: w.id, o, dirs });
-    this.sfx.shoot(w.id, false, this.ultra);
+    this.sfx.shoot(w.id, false, this.ultraKind === 'sigma');
 
     // 내 화면 효과 (판정은 서버)
     const muzzle = this.muzzlePos();
-    const enemyPos = this.enemyAlivePos();
+    const foes = this.otherPositions();
+    const bigHead = this.eventKind === 'bighead';
     for (const raw of dirs) {
       const l = Math.hypot(...raw);
       const d = [raw[0] / l, raw[1] / l, raw[2] / l];
-      const worldT = rayWorld(o, d, w.range);
-      const hit = enemyPos ? rayPlayer(o, d, enemyPos, this.eventKind === 'bighead', worldT) : null;
-      const t = hit ? hit.t : worldT;
+      let t = rayWorld(this.map, o, d, w.range);
+      let hit = null;
+      for (const p of foes) {
+        const h = rayPlayer(o, d, p, bigHead, t);
+        if (h) { hit = h; t = h.t; }
+      }
       const end = [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
-      const col = { fart: 0x9be02a, six7: 0xffe600, boom: 0xff3d81 }[w.id];
+      const col = { fart: 0x9be02a, six7: 0xffe600, boom: 0xff3d81, laser: 0xff1133 }[w.id];
+      if (w.id === 'laser') {
+        // 눈 두 개에서 나간다
+        this.effects.tracer(this.muzzlePos(0.2), end, col, 0.07, 0.11);
+        this.effects.tracer(this.muzzlePos(-0.2), end, col, 0.07, 0.11);
+        if (t < w.range - 0.1) this.effects.text(end, '👁️', { scale: 0.5, life: 0.25, stroke: null, rise: 0 });
+        continue;
+      }
       this.effects.tracer(muzzle, end, col, w.id === 'six7' ? 0.06 : 0.025, 0.08);
       if (!hit && t < w.range - 0.1 && (w.id !== 'boom' || Math.random() < 0.3)) {
         if (w.id === 'fart') this.effects.cloud(end, 1, 0xb5e02a);
@@ -909,11 +1049,11 @@ export class Game {
       this.shake = Math.min(1, this.shake + 0.22);
       this.hud.shout('BOOM', 'red');
     }
-    if (this.ammo[w.id] <= 0 && !this.ultra) this.startReload();
+    if (!inf && this.ammo[w.id] <= 0) this.startReload();
   }
 
   slap() {
-    if (this.frozen || !this.alive || this.slapCd > 0 || this.emote) return;
+    if (this.forced || this.frozen || !this.alive || this.slapCd > 0 || this.emote) return;
     this.slapCd = SLAP.cooldown;
     this.slapT = 0.26;
     this.sfx.whiff();
@@ -922,14 +1062,18 @@ export class Game {
     this.net.send({ t: 'slap', d: [dir.x, dir.y, dir.z] });
   }
 
-  muzzlePos() {
-    const v = new THREE.Vector3(0.24, -0.2, -0.75).applyMatrix4(this.camera.matrixWorld);
+  muzzlePos(side = 0.24) {
+    const v = new THREE.Vector3(side, -0.2, -0.75).applyMatrix4(this.camera.matrixWorld);
     return [v.x, v.y, v.z];
   }
 
-  enemyAlivePos() {
-    const r = this.enemyRender();
-    return r && r.a ? r.p : null;
+  otherPositions() {
+    const out = [];
+    for (const id of this.buffers.keys()) {
+      const r = this.renderOf(id);
+      if (r && r.a) out.push(r.p);
+    }
+    return out;
   }
 
   // ---------- 프레임 ----------
@@ -942,7 +1086,7 @@ export class Game {
 
     const t = now / 1000;
     this.big67.material.rotation = Math.sin(t * 1.4) * 0.14;
-    this.big67.position.y = 15.5 + Math.sin(t * 2) * 0.5;
+    this.big67.position.y = this.big67.userData.baseY + Math.sin(t * 2) * 0.5;
     for (const [i, m] of this.padMeshes.entries()) {
       m.position.y = 0.9 + Math.sin(t * 5 + i) * 0.25;
       m.rotation.y = t * 2;
@@ -956,7 +1100,7 @@ export class Game {
 
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
-    if (this.mode === 'match' && this.alive && !this.emote) {
+    if (this.mode === 'match' && this.alive && !this.emote && !this.forced && now >= this.cineUntil) {
       this.renderer.clearDepth();
       this.renderer.render(this.vmScene, this.vmCam);
     }
@@ -967,8 +1111,9 @@ export class Game {
     const t = this.attractT * 0.25;
     this.camera.fov = 58;
     this.camera.updateProjectionMatrix();
-    this.camera.position.set(Math.sin(t) * 7.4, 2.5 + Math.sin(t * 2) * 0.35, Math.cos(t) * 7.4);
-    this.camera.lookAt(0, 1.45, 0);
+    const sc = this.map.showcase;
+    this.camera.position.set(sc.pos[0] + Math.sin(t) * sc.r, sc.pos[1] + 2.5 + Math.sin(t * 2) * 0.35, sc.pos[2] + Math.cos(t) * sc.r);
+    this.camera.lookAt(sc.pos[0], sc.pos[1] + 1.45, sc.pos[2]);
     for (const c of this.chars.values()) {
       c.root.rotation.y = Math.atan2(c.root.position.x - this.camera.position.x, c.root.position.z - this.camera.position.z);
     }
@@ -998,20 +1143,22 @@ export class Game {
 
     if (this.alive) this.updateLocal(dt);
 
-    // 상대
-    const r = this.enemyRender();
-    if (r && this.enemy) {
-      this.enemy.root.position.set(r.p[0], r.p[1], r.p[2]);
-      this.enemy.root.rotation.y = r.y;
-      this.enemy.pitch = r.pi;
-      if (r.a && this.enemy.deadT < 0 && this.enemy.speed > 3 && Math.hypot(this.body.x - r.p[0], this.body.z - r.p[2]) < 20) {
-        this.enemyStepAcc += dt;
-        if (this.enemyStepAcc > 0.34) { this.enemyStepAcc = 0; this.sfx.squeak(); }
+    // 상대들
+    for (const [id, c] of this.chars) {
+      if (id === this.myId) continue;
+      const r = this.renderOf(id);
+      if (!r) continue;
+      c.root.position.set(r.p[0], r.p[1], r.p[2]);
+      c.root.rotation.y = r.y;
+      c.pitch = r.pi;
+      if (r.a && c.deadT < 0 && c.speed > 3 && Math.hypot(this.body.x - r.p[0], this.body.z - r.p[2]) < 20) {
+        c.stepAcc = (c.stepAcc ?? 0) + dt;
+        if (c.stepAcc > 0.34) { c.stepAcc = 0; this.sfx.squeak(); }
       }
     }
 
     // 음악: 파밍·각성 중엔 phonk
-    if (!this.frozen) this.sfx.playMusic(this.emote === 1 || this.ultra ? 'phonk' : 'battle');
+    if (!this.frozen && performance.now() > this.musicHold) this.sfx.playMusic(this.emote === 1 || this.ultra ? 'phonk' : 'battle');
 
     this.updateCamera(dt);
     this.updateViewmodel(dt);
@@ -1031,10 +1178,22 @@ export class Game {
   }
 
   updateLocal(dt) {
+    if (this.forced) {
+      // 고양이 비행 중엔 서버가 몰아 준다
+      this.emote = 0;
+      this.jumpQueued = this.dashQueued = this.shotQueued = false;
+      if (this.me) {
+        this.me.root.position.set(this.body.x, this.body.y, this.body.z);
+        this.me.root.rotation.y = this.yaw;
+        this.me.setVisibleBody(true);
+        if (this.me.tag) this.me.tag.visible = false;
+      }
+      return;
+    }
     const k = this.keys;
     const held = (c) => k.has(c);
     let emote = 0;
-    if (!this.frozen && this.body.onGround) {
+    if (!this.frozen && this.body.onGround && !this.ultraKind) {
       if (held('KeyG')) emote = 1;
       else if (held('KeyT')) emote = 2;
     }
@@ -1047,7 +1206,11 @@ export class Game {
 
     const fwd = emote || this.frozen ? 0 : (held('KeyW') ? 1 : 0) - (held('KeyS') ? 1 : 0);
     const right = emote || this.frozen ? 0 : (held('KeyD') ? 1 : 0) - (held('KeyA') ? 1 : 0);
-    const opts = { gravityMul: this.eventKind === 'moon' ? 0.35 : 1, speedMul: this.ultra ? MOVE.ultraSpeedMul : 1 };
+    const opts = {
+      map: this.map,
+      gravityMul: this.eventKind === 'moon' ? 0.35 : 1,
+      speedMul: this.ultraKind === 'sigma' ? MOVE.ultraSpeedMul : this.grabbedBy !== null ? 0.55 : 1,
+    };
     const events = stepBodyFixed(this.body, {
       fwd, right, yaw: this.yaw, jump: this.jumpQueued && !this.frozen, dash: this.dashQueued && !this.frozen,
     }, dt, opts);
@@ -1065,9 +1228,9 @@ export class Game {
       this.stepAcc += dt * speed;
       if (this.stepAcc > 3.1) { this.stepAcc = 0; this.sfx.squeak(); }
     }
-    if (this.body.y < FALL_Y) this.body.vy = 0; // 서버가 죽여 줄 때까지 대기
+    if (this.body.y < this.map.fallY) this.body.vy = 0; // 서버가 죽여 줄 때까지 대기
 
-    if (this.shotQueued || (this.mouseDown && WEAPONS[this.weapon].auto)) this.tryFire();
+    if (this.shotQueued || (this.mouseDown && this.curWeapon().auto)) this.tryFire();
     this.shotQueued = false;
 
     if (this.me) {
@@ -1081,6 +1244,16 @@ export class Game {
   }
 
   updateCamera(dt) {
+    this.updateCameraBase(dt);
+    if (performance.now() < this.cineUntil && this.cinePos) {
+      // 조준값은 그대로 두고 화면만 위로 돌린다
+      const p = this.cinePos;
+      this.camera.lookAt(p[0], p[1] + 15, p[2]);
+      this.camera.updateMatrixWorld();
+    }
+  }
+
+  updateCameraBase(dt) {
     const cam = this.camera;
     const fovBase = this.zoom ? 46 : 80;
     const want = fovBase + this.fovKick + (this.ultra ? 8 : 0);
@@ -1103,7 +1276,7 @@ export class Game {
       return;
     }
 
-    if (this.emote) {
+    if (this.emote || this.forced) {
       // 포즈 잡는 내 모습을 뒤에서 봄
       const a = performance.now() / 1000 * 0.9;
       const r = this.eventKind === 'bighead' ? 7 : 5.2;
@@ -1112,7 +1285,7 @@ export class Game {
       const dir = [dx, 0.35, dz];
       const l = Math.hypot(...dir);
       const nd = [dir[0] / l, dir[1] / l, dir[2] / l];
-      const dist = Math.min(r, rayWorld([fx, fy, fz], nd, r) - 0.25);
+      const dist = this.forced ? r : Math.min(r, rayWorld(this.map, [fx, fy, fz], nd, r) - 0.25);
       cam.position.set(fx + nd[0] * dist, fy + nd[1] * dist, fz + nd[2] * dist);
       cam.lookAt(fx, fy, fz);
       return;
@@ -1150,7 +1323,7 @@ export class Game {
     } else {
       vm.rotation.z = 0;
     }
-    vm.scale.setScalar(this.ultra ? 1.25 : 1);
+    vm.scale.setScalar(this.ultraKind === 'sigma' ? 1.25 : 1);
 
     const h = this.vmHand;
     h.visible = this.slapT > 0;
@@ -1163,4 +1336,3 @@ export class Game {
   }
 }
 
-export { HITBOX };

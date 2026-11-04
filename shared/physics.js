@@ -1,5 +1,4 @@
 // 이동 물리. 클라이언트 본인 조작과 서버 봇이 같은 코드를 쓴다.
-import { BOXES, JUMP_PADS } from './map.js';
 import { PLAYER, MOVE } from './constants.js';
 
 const R = PLAYER.radius, H = PLAYER.height;
@@ -9,17 +8,17 @@ export function newBody(x = 0, y = 0, z = 0) {
   return { x, y, z, vx: 0, vy: 0, vz: 0, onGround: false, jumps: 0, dashT: 0, dashCd: 0, dashX: 0, dashZ: 0 };
 }
 
-function hits(x, y, z) {
-  for (const b of BOXES) {
+function hits(map, x, y, z) {
+  for (const b of map.boxes) {
     if (x + R > b.min[0] && x - R < b.max[0] && y + H > b.min[1] && y < b.max[1] && z + R > b.min[2] && z - R < b.max[2]) return b;
   }
   return null;
 }
 
 // 앞에 있는 턱의 맨 위까지 올라서는 데 필요한 높이
-function stepHeight(x, y, z) {
+function stepHeight(map, x, y, z) {
   let top = y;
-  for (const b of BOXES) {
+  for (const b of map.boxes) {
     if (x + R > b.min[0] && x - R < b.max[0] && y + H > b.min[1] && y < b.max[1] && z + R > b.min[2] && z - R < b.max[2]) {
       if (b.max[1] > top) top = b.max[1];
     }
@@ -27,17 +26,18 @@ function stepHeight(x, y, z) {
   return top - y + 0.001;
 }
 
-function canStep(x, y, z) {
-  const h = stepHeight(x, y, z);
-  return h <= STEP_UP && !hits(x, y + h, z);
+function canStep(map, x, y, z) {
+  const h = stepHeight(map, x, y, z);
+  return h <= STEP_UP && !hits(map, x, y + h, z);
 }
 
 /**
  * input: { fwd, right, yaw, jump, dash } (jump/dash는 이번 프레임에 눌렸는지)
- * opts: { gravityMul, speedMul }
+ * opts: { map, gravityMul, speedMul } (map 필수)
  * 반환: 소리 내기용 이벤트 목록 ('jump','doubleJump','pad','dash','land')
  */
-export function stepBody(s, input, dt, opts = {}) {
+export function stepBody(s, input, dt, opts) {
+  const { map } = opts;
   const ev = [];
   const gravity = MOVE.gravity * (opts.gravityMul ?? 1);
   const speed = MOVE.speed * (opts.speedMul ?? 1);
@@ -80,22 +80,22 @@ export function stepBody(s, input, dt, opts = {}) {
 
   // X
   let nx = s.x + s.vx * dt;
-  if (hits(nx, s.y, s.z)) {
-    if (s.onGround && canStep(nx, s.y, s.z)) s.y += stepHeight(nx, s.y, s.z);
+  if (hits(map, nx, s.y, s.z)) {
+    if (s.onGround && canStep(map, nx, s.y, s.z)) s.y += stepHeight(map, nx, s.y, s.z);
     else { nx = s.x; s.vx = 0; }
   }
   s.x = nx;
   // Z
   let nz = s.z + s.vz * dt;
-  if (hits(s.x, s.y, nz)) {
-    if (s.onGround && canStep(s.x, s.y, nz)) s.y += stepHeight(s.x, s.y, nz);
+  if (hits(map, s.x, s.y, nz)) {
+    if (s.onGround && canStep(map, s.x, s.y, nz)) s.y += stepHeight(map, s.x, s.y, nz);
     else { nz = s.z; s.vz = 0; }
   }
   s.z = nz;
   // Y
   const wasGround = s.onGround, fallV = s.vy;
   const ny = s.y + s.vy * dt;
-  const hit = hits(s.x, ny, s.z);
+  const hit = hits(map, s.x, ny, s.z);
   if (hit) {
     if (s.vy <= 0) {
       s.y = hit.max[1];
@@ -112,7 +112,7 @@ export function stepBody(s, input, dt, opts = {}) {
   }
 
   if (s.onGround) {
-    for (const p of JUMP_PADS) {
+    for (const p of map.pads) {
       if (Math.hypot(s.x - p.pos[0], s.z - p.pos[2]) < p.radius && Math.abs(s.y - p.pos[1]) < 0.3) {
         s.vy = p.power; s.vx += p.push[0]; s.vz += p.push[2];
         s.onGround = false; s.jumps = 1;

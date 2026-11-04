@@ -326,7 +326,8 @@ export class Sfx {
   shoot(w, remote = false, ultra = false) {
     if (!this.ready) return;
     const v = remote ? 0.55 : 1;
-    if (w === 'fart') this.fart(undefined, ultra ? rand(110, 160) : undefined, 0.5 * v);
+    if (w === 'laser') this.laser();
+    else if (w === 'fart') this.fart(undefined, ultra ? rand(110, 160) : undefined, 0.5 * v);
     else if (w === 'six7') {
       this.noise(0.08, 0.95 * v, { f0: 2200, q: 0.6, a: 0.001 });
       this.osc('square', 130, 62, 0.16, 0.6 * v, { a: 0.002, out: this.crunch });
@@ -336,6 +337,82 @@ export class Sfx {
       this.vineBoom();
       this.noise(0.14, 0.9 * v, { type: 'lowpass', f0: 4000, f1: 500, a: 0.001 });
     }
+  }
+
+  laser() {
+    if (!this.ready) return;
+    this.osc('sawtooth', 1700, 900, 0.09, 0.14, { a: 0.002 });
+    this.osc('square', 2600, 2100, 0.05, 0.05, { a: 0.002 });
+  }
+
+  meow() {
+    if (!this.ready) return;
+    const c = this.ctx, t = c.currentTime;
+    const f = c.createBiquadFilter();
+    f.type = 'bandpass'; f.Q.value = 3;
+    f.frequency.setValueAtTime(700, t);
+    f.frequency.linearRampToValueAtTime(1900, t + 0.14);
+    f.frequency.linearRampToValueAtTime(800, t + 0.42);
+    const g = c.createGain();
+    this.env(g, t, 0.03, 0.9, 0.42);
+    const o = c.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(520, t);
+    o.frequency.linearRampToValueAtTime(880, t + 0.15);
+    o.frequency.linearRampToValueAtTime(430, t + 0.45);
+    o.connect(f); f.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + 0.5);
+  }
+
+  scratch() {
+    if (!this.ready) return;
+    this.noise(0.07, 0.5, { f0: rand(2500, 4000), f1: rand(700, 1200), q: 2, a: 0.002 });
+  }
+
+  // 변기 물 내려가는 소리
+  flush(ms = 5000) {
+    if (!this.ready) return;
+    const d = ms / 1000;
+    this.noise(d, 0.65, { f0: 2600, f1: 240, q: 1.2, a: 0.25 });
+    this.noise(d * 0.7, 0.3, { type: 'lowpass', f0: 500, f1: 140, q: 3, a: 0.3 });
+    for (let i = 0; i < 9; i++) this.osc('sine', rand(300, 700), rand(700, 1500), 0.07, 0.13, { at: rand(0.2, d) });
+  }
+
+  // 핵 떨어지기 전: 불안하게 올라가는 현악기 무리
+  nukeWind(ms = 2600) {
+    if (!this.ready) return;
+    const d = ms / 1000, c = this.ctx, t = c.currentTime;
+    const f = c.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(500, t);
+    f.frequency.exponentialRampToValueAtTime(4200, t + d);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.42, t + d * 0.96);
+    g.gain.setValueAtTime(0.0001, t + d);
+    f.connect(g); g.connect(this.master);
+    const trem = c.createOscillator();
+    trem.frequency.value = 11;
+    const tg = c.createGain();
+    tg.gain.value = 0.12;
+    trem.connect(tg); tg.connect(g.gain);
+    trem.start(t); trem.stop(t + d);
+    for (const base of [110, 111.5, 165, 220.7, 330]) {
+      const o = c.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(base, t);
+      o.frequency.exponentialRampToValueAtTime(base * 2.6, t + d);
+      o.connect(f);
+      o.start(t); o.stop(t + d);
+    }
+  }
+
+  // 핵: 묵직하게 오래 간다
+  nukeBoom() {
+    if (!this.ready) return;
+    this.noise(5.5, 1, { type: 'lowpass', f0: 2400, f1: 45, q: 0.5, a: 0.03, out: this.crunch });
+    this.osc('sine', 90, 19, 5.5, 1, { out: this.crunch });
+    this.osc('triangle', 55, 22, 6.5, 0.8);
   }
 
   // 눈깔 튀어나오는 소리

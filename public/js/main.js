@@ -1,5 +1,6 @@
 // 접속, 방 목록, 대기실, 결과 화면. 경기가 끝나면 항상 대기실로 돌아온다.
-import { SKINS, SKIN_IDS, WIN_KILLS } from '/shared/constants.js';
+import { SKINS, SKIN_IDS, WIN_KILLS, MAX_PLAYERS, ULTRAS } from '/shared/constants.js';
+import { MAPS, MAP_IDS } from '/shared/map.js';
 import { Sfx } from './audio.js';
 import { Hud } from './hud.js';
 import { Game } from './game.js';
@@ -84,11 +85,12 @@ H.room = (m) => {
   const wasIn = !!room;
   room = m.room;
   for (const p of room.players) hud.names.set(p.id, p.name);
+  if (inMatch) game.onRoster(room.players);
   if (!inMatch) {
     if (!screens.result.hidden) return; // 결과 화면 끝날 때 다시 그림
     showScreen('room');
     renderRoom();
-    game.setAttract(room.players);
+    game.setAttract(room.players, room.mapId);
     if (!wasIn) { sfx.unlock(); sfx.playMusic('lobby'); }
   }
 };
@@ -97,9 +99,6 @@ H.matchStart = (m) => {
   inMatch = true;
   sfx.unlock();
   for (const p of m.players) hud.names.set(p.id, p.name);
-  const me = m.players.find((p) => p.id === net.id);
-  const op = m.players.find((p) => p.id !== net.id);
-  hud.setNames(me?.name ?? '나', op?.name ?? '???');
   showScreen(null);
   game.onMatchStart(m, net.id);
   startTicker();
@@ -118,6 +117,10 @@ H.bomb = (m) => inMatch && game.onBomb(m);
 H.boom = (m) => inMatch && game.onBoom(m);
 H.pickup = (m) => inMatch && game.onPickup(m);
 H.knock = (m) => inMatch && game.onKnock(m);
+H.teleport = (m) => inMatch && game.onTeleport(m);
+H.cat = (m) => inMatch && game.onCat(m);
+H.nuke = (m) => inMatch && game.onNuke(m);
+H.nukeBoom = (m) => inMatch && game.onNukeBoom(m);
 H.matchEnd = (m) => {
   leaveMatchView();
   showResult(m);
@@ -127,7 +130,7 @@ H.backToLobby = () => {
   showScreen('room');
   myReady = false;
   renderRoom();
-  game.setAttract(room?.players ?? []);
+  game.setAttract(room?.players ?? [], room?.mapId);
   sfx.playMusic('lobby');
   addChat('시스템', '한 판 더 하려면 준비 눌러라');
 };
@@ -137,7 +140,7 @@ function leaveMatchView() {
   game.onMatchEnd();
   hud.show(false);
   stopTicker();
-  game.setAttract(room?.players ?? []);
+  game.setAttract(room?.players ?? [], room?.mapId);
 }
 
 // ---------- 홈 ----------
@@ -181,8 +184,9 @@ function renderRooms(rooms) {
     const name = document.createElement('span');
     name.textContent = r.name;
     const st = document.createElement('em');
-    const full = r.count >= 2 || r.state !== 'lobby';
-    st.textContent = r.state !== 'lobby' ? '싸우는 중' : `${r.count}/2`;
+    const full = r.count >= MAX_PLAYERS || r.state !== 'lobby';
+    const mapLabel = r.map === 'random' ? '🎲 랜덤' : `${MAPS[r.map]?.emoji ?? ''} ${MAPS[r.map]?.name ?? ''}`;
+    st.textContent = r.state !== 'lobby' ? '싸우는 중' : `${mapLabel} · ${r.count}/${MAX_PLAYERS}`;
     b.append(name, st);
     b.disabled = full;
     b.onclick = () => {
@@ -212,6 +216,28 @@ function renderSkins(box) {
       net.send({ t: 'skin', skin: id });
       sfx.quack();
       renderSkins(box);
+      showSkinDesc();
+    };
+    box.append(b);
+  }
+}
+
+function renderMaps(box) {
+  box.replaceChildren();
+  for (const id of [...MAP_IDS, 'random']) {
+    const def = MAPS[id];
+    const b = document.createElement('button');
+    b.className = `mapBtn${room.mapChoice === id ? ' on' : ''}`;
+    b.title = def?.desc ?? '시작할 때 아무 맵이나';
+    const f = document.createElement('i');
+    f.textContent = def?.emoji ?? '🎲';
+    const n = document.createElement('span');
+    n.textContent = def?.name ?? '랜덤';
+    b.append(f, n);
+    b.disabled = room.state !== 'lobby';
+    b.onclick = () => {
+      net.send({ t: 'map', id });
+      sfx.click();
     };
     box.append(b);
   }
@@ -222,7 +248,7 @@ function renderRoom() {
   $('roomTitle').textContent = room.name;
   const box = $('slots');
   box.replaceChildren();
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < MAX_PLAYERS; i++) {
     const p = room.players[i];
     const card = document.createElement('div');
     card.className = `slot${p?.ready ? ' ready' : ''}${p?.id === net.id ? ' me' : ''}`;
@@ -243,9 +269,9 @@ function renderRoom() {
       face.textContent = '❓';
       const info = document.createElement('div');
       const nm = document.createElement('strong');
-      nm.textContent = '상대 없음';
+      nm.textContent = '빈자리';
       const sub = document.createElement('small');
-      sub.textContent = '친구한테 주소 보내거나 봇 불러라';
+      sub.textContent = '친구 또는 봇';
       info.append(nm, sub);
       card.append(face, info);
     }
@@ -257,11 +283,16 @@ function renderRoom() {
   rb.textContent = myReady ? '준비 취소' : room.players.length < 2 ? '준비 (상대 기다리는 중)' : '준비 완료 🗿';
   rb.classList.toggle('on', myReady);
   rb.disabled = room.state !== 'lobby';
-  const hasBot = room.players.some((p) => p.isBot);
-  $('botBtn').textContent = hasBot ? '봇 내보내기' : '🤖 봇 부르기';
-  $('botBtn').disabled = room.state !== 'lobby' || (!hasBot && room.players.length >= 2);
+  $('botBtn').disabled = room.state !== 'lobby' || room.players.length >= MAX_PLAYERS;
+  $('botOutBtn').disabled = room.state !== 'lobby' || !room.players.some((p) => p.isBot);
+  renderMaps($('mapPick'));
   renderSkins($('skinPick'));
-  $('hostHint').textContent = location.host;
+  showSkinDesc();
+}
+
+function showSkinDesc() {
+  const u = ULTRAS[currentSkin];
+  $('skinDesc').textContent = u ? `각성: ${u.name}. ${u.desc}` : '';
 }
 
 $('readyBtn').onclick = () => {
@@ -270,10 +301,10 @@ $('readyBtn').onclick = () => {
   sfx.bing();
 };
 $('botBtn').onclick = () => {
-  const hasBot = room?.players.some((p) => p.isBot);
-  net.send({ t: hasBot ? 'removeBot' : 'addBot' });
+  net.send({ t: 'addBot' });
   sfx.bark();
 };
+$('botOutBtn').onclick = () => net.send({ t: 'removeBot' });
 $('leaveBtn').onclick = () => net.send({ t: 'leave' });
 $('copyBtn').onclick = async () => {
   const url = location.href.split('#')[0];
@@ -310,7 +341,7 @@ function showResult(m) {
   const draw = m.winner === null;
   const box = $('result');
   box.dataset.outcome = draw ? 'draw' : won ? 'win' : 'lose';
-  const reason = { kills: `${WIN_KILLS}킬 달성`, time: '시간 끝', ragequit: '상대 도망감 ㅋㅋ' }[m.reason] ?? '';
+  const reason = { kills: `${WIN_KILLS}킬 달성`, time: '시간 끝', ragequit: '다 도망감 ㅋㅋ' }[m.reason] ?? '';
   $('resultTitle').textContent = draw ? '무승부?? 둘 다 NPC' : won ? pick(RESULT_WIN) : pick(RESULT_LOSE);
   $('resultSub').textContent = `${won ? 'YOU WIN' : draw ? 'DRAW' : 'YOU LOSE'} · ${reason}`;
   $('sixSevenBanner').hidden = !m.sixSeven;

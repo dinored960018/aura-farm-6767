@@ -1,15 +1,16 @@
-// 방 하나 = 대기실 + 경기 1판. 서버가 체력·킬·아우라·판정을 전부 결정한다.
+// 방 하나 = 대기실 + 경기 1판 (개인전, 2~4명). 서버가 체력·킬·아우라·판정을 전부 결정한다.
 import {
-  TICK_HZ, MAX_HP, WIN_KILLS, MATCH_SECONDS, AURA_MAX, ULTRA_MS, INTERP_MS,
-  WEAPONS, SLAP, AURA, CHICKEN_HEAL, BOMB, EVENTS, EVENT_IDS, PLAYER, DEFAULT_TIMINGS, SKIN_IDS,
+  TICK_HZ, MAX_HP, WIN_KILLS, MATCH_SECONDS, AURA_MAX, INTERP_MS, MAX_PLAYERS,
+  WEAPONS, LASER, SLAP, AURA, CHICKEN_HEAL, BOMB, NUKE, CAT, FLUSH, ULTRAS, EVENTS, EVENT_IDS, PLAYER, DEFAULT_TIMINGS, SKIN_IDS,
 } from '../shared/constants.js';
-import { PICKUPS, FALL_Y, pickSpawn, rayWorld, rayPlayer, groundAt } from '../shared/map.js';
+import { MAPS, MAP_IDS, DEFAULT_MAP, pickSpawn, rayWorld, rayPlayer, groundAt } from '../shared/map.js';
 import { Bot } from './bot.js';
 
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 const validVec = (v) => Array.isArray(v) && v.length === 3 && v.every(finite);
 const round = (n) => Math.round(n * 100) / 100;
-const BOT_NAMES = ['AI 민수', '연습용 NPC', '봇치더락', '오하이오 봇'];
+const BOT_NAMES = ['AI 민수', '연습용 NPC', '봇치더락', '오하이오 봇', '월급루팡 봇', '스킬이슈 봇', '인턴 봇'];
+const CREDIT_MS = 8000;
 
 export class Room {
   constructor(id, name, hub, timings = {}) {
@@ -21,23 +22,25 @@ export class Room {
     this.state = 'lobby';
     this.stateUntil = 0;
     this.matchEndsAt = 0;
+    this.mapChoice = DEFAULT_MAP;
+    this.map = MAPS[DEFAULT_MAP];
     this.pickups = [];
     this.bombs = [];
+    this.nukes = [];
     this.event = null;
     this.nextEventAt = 0;
-    this.seq = 0;
   }
 
   // ---------- 대기실 ----------
   summary() {
-    return { id: this.id, name: this.name, state: this.state, count: this.players.length };
+    return { id: this.id, name: this.name, state: this.state, count: this.players.length, max: MAX_PLAYERS, map: this.mapChoice };
   }
 
   roomMessage() {
     return {
       t: 'room',
       room: {
-        id: this.id, name: this.name, state: this.state,
+        id: this.id, name: this.name, state: this.state, mapChoice: this.mapChoice, mapId: this.map.id,
         players: this.players.map((p) => ({
           id: p.id, name: p.name, skin: p.skin, ready: p.ready, wins: p.wins, isBot: p.isBot,
         })),
@@ -56,7 +59,7 @@ export class Room {
   }
 
   add(player) {
-    if (this.players.length >= 2 || this.state !== 'lobby') return false;
+    if (this.players.length >= MAX_PLAYERS || this.state !== 'lobby') return false;
     player.room = this;
     player.ready = false;
     player.wins = 0;
@@ -68,6 +71,8 @@ export class Room {
   remove(player) {
     const i = this.players.indexOf(player);
     if (i < 0) return;
+    if (player.ultraKind) this.endUltra(player, false);
+    for (const q of this.players) if (q.cat?.target === player) { q.cat.target = null; q.cat.latched = false; }
     this.players.splice(i, 1);
     player.room = null;
     const humans = this.players.filter((p) => !p.isBot);
@@ -77,7 +82,12 @@ export class Room {
       return;
     }
     if (this.state === 'countdown' || this.state === 'playing') {
-      this.endMatch(this.players[0], 'ragequit');
+      if (this.players.length >= 2) {
+        this.broadcast({ t: 'chat', from: '시스템', text: `${player.name} 도망침 ㅋㅋ` });
+        this.sendRoom();
+      } else {
+        this.endMatch(this.players[0], 'ragequit');
+      }
     } else if (this.state === 'results') {
       this.broadcast({ t: 'chat', from: '시스템', text: `${player.name} 도망침 ㅋㅋ` });
       this.sendRoom();
@@ -89,8 +99,10 @@ export class Room {
   }
 
   addBot() {
-    if (this.state !== 'lobby' || this.players.length >= 2) return;
-    const bot = new Bot(this.hub.nextId(), BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)], SKIN_IDS[Math.floor(Math.random() * SKIN_IDS.length)]);
+    if (this.state !== 'lobby' || this.players.length >= MAX_PLAYERS) return;
+    const used = new Set(this.players.map((p) => p.name));
+    const names = BOT_NAMES.filter((n) => !used.has(n));
+    const bot = new Bot(this.hub.nextId(), names[Math.floor(Math.random() * names.length)], SKIN_IDS[Math.floor(Math.random() * SKIN_IDS.length)]);
     bot.room = this;
     bot.ready = true;
     bot.wins = 0;
@@ -101,7 +113,9 @@ export class Room {
 
   removeBot() {
     if (this.state !== 'lobby') return;
-    this.players = this.players.filter((p) => !p.isBot);
+    for (let i = this.players.length - 1; i >= 0; i--) {
+      if (this.players[i].isBot) { this.players.splice(i, 1); break; }
+    }
     this.sendRoom();
   }
 
@@ -118,34 +132,49 @@ export class Room {
     this.sendRoom();
   }
 
+  setMap(player, id) {
+    if (this.state !== 'lobby' || (id !== 'random' && !MAP_IDS.includes(id)) || this.mapChoice === id) return;
+    this.mapChoice = id;
+    if (id !== 'random') this.map = MAPS[id];
+    const label = id === 'random' ? '랜덤' : MAPS[id].name;
+    this.broadcast({ t: 'chat', from: '시스템', text: `${player.name}: 맵을 ${label}(으)로 바꿈` });
+    this.sendRoom();
+  }
+
   chat(player, text) {
     const clean = String(text ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 120);
     if (clean) this.broadcast({ t: 'chat', from: player.name, text: clean });
   }
 
   maybeStart() {
-    if (this.state === 'lobby' && this.players.length === 2 && this.players.every((p) => p.ready)) this.startMatch();
+    if (this.state === 'lobby' && this.players.length >= 2 && this.players.every((p) => p.ready)) this.startMatch();
   }
 
   // ---------- 경기 ----------
   startMatch() {
     const now = Date.now();
+    if (this.mapChoice === 'random') {
+      const rest = MAP_IDS.filter((m) => m !== this.map.id);
+      this.map = MAPS[rest[Math.floor(Math.random() * rest.length)]];
+    }
     this.state = 'countdown';
     this.stateUntil = now + this.t.countdownMs;
     this.event = null;
     this.bombs = [];
+    this.nukes = [];
     this.nextEventAt = now + this.t.countdownMs + this.t.eventFirstMs;
     this.matchEndsAt = now + this.t.countdownMs + MATCH_SECONDS * 1000;
-    this.pickups = PICKUPS.map((p) => ({ ...p, active: true, respawnAt: 0 }));
+    this.pickups = this.map.pickups.map((p) => ({ ...p, active: true, respawnAt: 0 }));
 
-    let prev = null;
+    const taken = [];
     for (const p of this.players) {
       p.resetForMatch();
-      this.placeAtSpawn(p, prev);
-      prev = p.pos;
+      this.placeAtSpawn(p, taken);
+      taken.push(p.pos);
     }
     this.broadcast({
       t: 'matchStart',
+      map: this.map.id,
       countdownMs: this.t.countdownMs,
       endsIn: this.matchEndsAt - now,
       players: this.players.map((p) => ({ id: p.id, name: p.name, skin: p.skin, pos: p.pos, yaw: p.yaw, isBot: p.isBot })),
@@ -155,7 +184,7 @@ export class Room {
   }
 
   placeAtSpawn(p, avoid) {
-    const sp = pickSpawn(avoid);
+    const sp = pickSpawn(this.map, avoid);
     p.pos = [...sp.pos];
     p.yaw = sp.yaw;
     p.pitch = 0;
@@ -164,16 +193,21 @@ export class Room {
     p.hp = MAX_HP;
     p.invulnUntil = Date.now() + this.t.invulnMs;
     p.emote = 0;
+    p.lastHitBy = null;
     if (p.isBot) p.onSpawn();
   }
 
-  opponent(p) {
-    return this.players.find((o) => o !== p) ?? null;
-  }
-
-  playStart() { return this.stateUntil; }
+  others(p) { return this.players.filter((o) => o !== p); }
   isPlaying() { return this.state === 'playing'; }
   bigHead() { return this.event?.kind === 'bighead'; }
+  isGrabbed(p) { return this.players.some((q) => q.cat?.latched && q.cat.target === p); }
+
+  // 혼자 죽어도 마지막으로 때린 사람 몫. 1대1이면 상대 몫.
+  creditFor(victim, now = Date.now()) {
+    if (victim.lastHitBy && now - victim.lastHitAt < CREDIT_MS && this.players.includes(victim.lastHitBy)) return victim.lastHitBy;
+    const rest = this.others(victim);
+    return rest.length === 1 ? rest[0] : null;
+  }
 
   tick(now, dt) {
     if (this.state === 'countdown') {
@@ -192,21 +226,24 @@ export class Room {
   }
 
   tickPlaying(now, dt) {
-    for (const p of this.players) {
-      if (p.isBot) p.think(this, now, dt);
+    for (const p of [...this.players]) {
+      if (this.state !== 'playing') return;
+      if (p.isBot && !p.cat) p.think(this, now, dt);
+      if (this.state !== 'playing') return;
       if (!p.alive) {
         if (now >= p.respawnAt) this.respawn(p);
         continue;
       }
-      if (p.ultraUntil && now >= p.ultraUntil) {
-        p.ultraUntil = 0;
-        this.broadcast({ t: 'ultra', id: p.id, on: false });
-      }
-      if (p.emote === 1 && now - p.movedAt > 150) {
+      if (p.ultraUntil && now >= p.ultraUntil) this.endUltra(p, true);
+      if (p.cat) this.tickCat(p, now, dt);
+      if (this.state !== 'playing') return;
+      if (p.flush && p.alive) this.tickFlush(p, now);
+      if (this.state !== 'playing') return;
+      if (p.alive && p.emote === 1 && now - p.movedAt > 150) {
         this.addAura(p, AURA.farmPerSec * dt, null);
       }
-      if (p.pos[1] < FALL_Y) {
-        this.kill(p, this.opponent(p), { weapon: 'fall', head: false });
+      if (p.alive && !p.cat && p.pos[1] < this.map.fallY) {
+        this.kill(p, this.creditFor(p, now), { weapon: 'fall', head: false });
         if (this.state !== 'playing') return;
       }
     }
@@ -219,6 +256,8 @@ export class Room {
     }
     this.tickBombs(now);
     if (this.state !== 'playing') return;
+    this.tickNukes(now);
+    if (this.state !== 'playing') return;
     this.tickEvents(now);
     if (now >= this.matchEndsAt) this.endByTime();
   }
@@ -229,8 +268,7 @@ export class Room {
       this.broadcast({ t: 'event', kind: null });
     }
     if (!this.event && now >= this.nextEventAt) {
-      const kind = EVENT_IDS[Math.floor(Math.random() * EVENT_IDS.length)];
-      this.startEvent(kind, now);
+      this.startEvent(EVENT_IDS[Math.floor(Math.random() * EVENT_IDS.length)], now);
     }
   }
 
@@ -243,14 +281,15 @@ export class Room {
   }
 
   scheduleAirstrike(now) {
-    // 6발 + 7발. 양쪽을 조준하고, 나머지는 아무 데나.
+    // 6발 + 7발. 사람들을 노리고, 나머지는 아무 데나.
     const targets = this.players.filter((p) => p.alive);
+    const lim = this.map.bounds - 2;
     for (let i = 0; i < 13; i++) {
-      const anchor = targets.length && Math.random() < 0.7 ? targets[i % targets.length].pos : [0, 0, 0];
-      const spread = 9;
-      const x = Math.max(-26, Math.min(26, anchor[0] + (Math.random() - 0.5) * spread));
-      const z = Math.max(-26, Math.min(26, anchor[2] + (Math.random() - 0.5) * spread));
-      const y = Math.max(0, groundAt(x, z, anchor[1] + 1));
+      const anchor = targets.length && Math.random() < 0.7 ? targets[i % targets.length].pos : this.map.showcase.pos;
+      const x = Math.max(-lim, Math.min(lim, anchor[0] + (Math.random() - 0.5) * 9));
+      const z = Math.max(-lim, Math.min(lim, anchor[2] + (Math.random() - 0.5) * 9));
+      const g = groundAt(this.map, x, z, anchor[1] + 1);
+      const y = g > -50 ? g : anchor[1];
       const at = now + BOMB.fuseMs + (i < 6 ? i * 280 : 2000 + (i - 6) * 280);
       this.bombs.push({ pos: [x, y, z], at });
       this.broadcast({ t: 'bomb', pos: [round(x), round(y), round(z)], in: at - now });
@@ -271,7 +310,143 @@ export class Room {
         const k = 1 - d / BOMB.radius;
         const l = d || 1;
         this.knock(p, [dx / l * BOMB.knock * k, 8 * k + 3, dz / l * BOMB.knock * k]);
-        this.damage(p, this.opponent(p), BOMB.damage * k, { weapon: 'bomb', head: false, env: true, pos: p.pos });
+        this.damage(p, this.creditFor(p, now), BOMB.damage * k, { weapon: 'bomb', head: false, env: true, pos: p.pos });
+        if (this.state !== 'playing') return;
+      }
+    }
+  }
+
+  // ---------- 캐릭터별 각성 ----------
+  onUltra(p) {
+    if (!this.isPlaying() || !p.alive || p.aura < AURA_MAX || p.ultraKind) return;
+    const now = Date.now();
+    const kind = ULTRAS[p.skin] ? p.skin : 'sigma';
+    const def = ULTRAS[kind];
+    p.aura = 0;
+    p.ultraKind = kind;
+    p.ultraUntil = now + def.ms;
+    p.emote = 0;
+    this.broadcast({ t: 'ultra', id: p.id, on: true, ms: def.ms, kind });
+    if (kind === 'cat') {
+      p.cat = { target: null, latched: false, start: [...p.pos], nextTick: 0 };
+    } else if (kind === 'toilet') {
+      p.flush = { nextTick: now };
+    } else if (kind === 'cone') {
+      this.launchNuke(p, now);
+    }
+  }
+
+  endUltra(p, notify) {
+    if (!p.ultraKind) return;
+    const c = p.cat;
+    p.cat = null;
+    p.flush = null;
+    p.ultraKind = null;
+    p.ultraUntil = 0;
+    if (c && p.alive && notify) {
+      // 벽 뚫고 날아다녔으니 안전한 곳에 내려놓는다
+      const landing = c.latched && c.target?.alive ? c.target.pos : c.start;
+      p.teleport(landing);
+    }
+    if (notify) this.broadcast({ t: 'ultra', id: p.id, on: false });
+  }
+
+  nearestAlive(p) {
+    let best = null, bestD = Infinity;
+    for (const o of this.others(p)) {
+      if (!o.alive) continue;
+      const d = Math.hypot(o.pos[0] - p.pos[0], o.pos[1] - p.pos[1], o.pos[2] - p.pos[2]);
+      if (d < bestD) { bestD = d; best = o; }
+    }
+    return best;
+  }
+
+  // 고양이: 제일 가까운 놈에게 날아가서 얼굴에 붙어 할퀸다. 맞는 쪽은 싸대기(F)로 떼어낼 수 있다.
+  tickCat(p, now, dt) {
+    const c = p.cat;
+    if (!c.target || !c.target.alive) {
+      if (c.latched) this.broadcast({ t: 'cat', id: p.id, to: null });
+      c.latched = false;
+      c.target = this.nearestAlive(p);
+      if (!c.target) return;
+    }
+    const t = c.target;
+    if (!c.latched) {
+      const goal = [t.pos[0], t.pos[1] + 0.6, t.pos[2]];
+      const to = [goal[0] - p.pos[0], goal[1] - p.pos[1], goal[2] - p.pos[2]];
+      const d = Math.hypot(to[0], to[1], to[2]) || 1;
+      const move = CAT.flySpeed * dt;
+      if (d <= Math.max(CAT.latchRange, move)) {
+        c.latched = true;
+        c.nextTick = now;
+        this.broadcast({ t: 'cat', id: p.id, to: t.id });
+      } else {
+        p.pos = [p.pos[0] + (to[0] / d) * move, p.pos[1] + (to[1] / d) * move, p.pos[2] + (to[2] / d) * move];
+        p.yaw = Math.atan2(-to[0], -to[2]);
+      }
+    }
+    if (c.latched) {
+      const s = Math.sin(t.yaw), k = Math.cos(t.yaw);
+      p.pos = [t.pos[0] - s * 0.55, t.pos[1] + 0.55, t.pos[2] - k * 0.55];
+      p.yaw = t.yaw + Math.PI;
+      if (now >= c.nextTick) {
+        c.nextTick = now + CAT.tickMs;
+        this.damage(t, p, CAT.damage, { weapon: 'claw', head: false, env: true, pos: t.pos });
+      }
+    }
+    p.movedAt = now;
+    p.pushHistory(now);
+  }
+
+  // 변기맨: 주변을 빨아들이고, 코앞까지 오면 물에 갈린다.
+  tickFlush(p, now) {
+    if (now < p.flush.nextTick) return;
+    p.flush.nextTick = now + FLUSH.tickMs;
+    for (const q of this.others(p)) {
+      if (!q.alive || now < q.invulnUntil) continue;
+      const dx = p.pos[0] - q.pos[0], dz = p.pos[2] - q.pos[2];
+      const d = Math.hypot(dx, dz) || 1;
+      if (d > FLUSH.radius || Math.abs(p.pos[1] - q.pos[1]) > 8) continue;
+      const pull = FLUSH.pull * (1 - d / FLUSH.radius) + 3;
+      this.knock(q, [dx / d * pull, 2.2, dz / d * pull]);
+      if (d < FLUSH.coreRadius) {
+        this.damage(q, p, FLUSH.damage, { weapon: 'flush', head: false, env: true, pos: q.pos });
+        if (this.state !== 'playing') return;
+      }
+    }
+  }
+
+  // 오하이오 주민: 조준한 곳에 핵. 쏜 사람은 방사능 면역.
+  launchNuke(p, now) {
+    const cp = Math.cos(p.pitch);
+    const d = [-Math.sin(p.yaw) * cp, Math.sin(p.pitch), -Math.cos(p.yaw) * cp];
+    const eye = [p.pos[0], p.pos[1] + PLAYER.eye, p.pos[2]];
+    const t = rayWorld(this.map, eye, d, NUKE.aimRange);
+    const hit = [eye[0] + d[0] * t, eye[1] + d[1] * t, eye[2] + d[2] * t];
+    const g = groundAt(this.map, hit[0], hit[2], hit[1] + 0.5);
+    const pos = [round(hit[0]), round(g > -50 ? g : Math.max(0, hit[1])), round(hit[2])];
+    this.nukes.push({ pos, at: now + NUKE.fuseMs, owner: p });
+    this.broadcast({ t: 'nuke', id: p.id, pos, in: NUKE.fuseMs, radius: NUKE.radius });
+  }
+
+  tickNukes(now) {
+    if (!this.nukes.length) return;
+    const due = this.nukes.filter((n) => now >= n.at);
+    this.nukes = this.nukes.filter((n) => now < n.at);
+    for (const n of due) {
+      this.broadcast({ t: 'nukeBoom', id: n.owner.id, pos: n.pos, radius: NUKE.radius });
+      const owner = this.players.includes(n.owner) ? n.owner : null;
+      const center = [n.pos[0], n.pos[1] + 3, n.pos[2]];
+      for (const q of [...this.players]) {
+        if (q === n.owner || !q.alive) continue;
+        const to = [q.pos[0] - center[0], q.pos[1] + 1 - center[1], q.pos[2] - center[2]];
+        const d = Math.hypot(to[0], to[1], to[2]) || 1;
+        if (d >= NUKE.radius) continue;
+        const dir = [to[0] / d, to[1] / d, to[2] / d];
+        const covered = rayWorld(this.map, center, dir, d) < d - 0.05; // 벽 뒤면 절반
+        const k = 1 - d / NUKE.radius;
+        this.knock(q, [dir[0] * NUKE.knock * k, 14 * k + 4, dir[2] * NUKE.knock * k]);
+        this.damage(q, owner, NUKE.damage * k * (covered ? 0.5 : 1), { weapon: 'nuke', head: false, env: true, pos: q.pos });
         if (this.state !== 'playing') return;
       }
     }
@@ -283,25 +458,26 @@ export class Room {
     if (!validVec(msg.p) || !finite(msg.y) || !finite(msg.pi)) return;
     if (!p.alive) return;
     const now = Date.now();
-    if (this.state === 'playing') {
+    if (this.state === 'playing' && !p.cat) {
       const moved = Math.hypot(msg.p[0] - p.pos[0], msg.p[2] - p.pos[2]);
       if (moved > 0.02) p.movedAt = now;
+      const lim = this.map.bounds + 20;
       p.pos = [
-        Math.max(-30, Math.min(30, msg.p[0])),
+        Math.max(-lim, Math.min(lim, msg.p[0])),
         Math.max(-60, Math.min(60, msg.p[1])),
-        Math.max(-30, Math.min(30, msg.p[2])),
+        Math.max(-lim, Math.min(lim, msg.p[2])),
       ];
     }
-    p.yaw = msg.y;
+    if (!p.cat) p.yaw = msg.y;
     p.pitch = Math.max(-1.6, Math.min(1.6, msg.pi));
     if (WEAPONS[msg.w]) p.weapon = msg.w;
-    const em = msg.e === 1 || msg.e === 2 ? msg.e : 0;
+    const em = !p.cat && (msg.e === 1 || msg.e === 2) ? msg.e : 0;
     if (em === 2 && p.emote !== 2 && now - p.lastSixSeven > 2000) {
       p.lastSixSeven = now;
       this.addAura(p, AURA.sixSeven, '6-7');
     }
     p.emote = em;
-    p.pushHistory(now);
+    if (!p.cat) p.pushHistory(now);
     this.checkPickups(p, now);
   }
 
@@ -320,20 +496,22 @@ export class Room {
   }
 
   onShoot(p, msg) {
-    if (!this.isPlaying() || !p.alive) return;
-    const w = WEAPONS[msg.w];
+    if (!this.isPlaying() || !p.alive || p.cat) return;
+    const w = msg.w === LASER.id ? (p.ultraKind === 'minsu' ? LASER : null) : WEAPONS[msg.w];
     if (!w || !validVec(msg.o) || !Array.isArray(msg.dirs) || msg.dirs.length === 0 || msg.dirs.length > w.pellets) return;
     const now = Date.now();
-    const interval = w.interval * (p.ultraUntil ? 0.6 : 1) * 0.75 * 1000; // 네트워크 흔들림 허용치
+    const sigma = p.ultraKind === 'sigma';
+    const interval = w.interval * (sigma ? 0.6 : 1) * 0.75 * 1000; // 네트워크 흔들림 허용치
     if (now - (p.lastShot[w.id] ?? 0) < interval) return;
     p.lastShot[w.id] = now;
 
     const eye = [p.pos[0], p.pos[1] + PLAYER.eye, p.pos[2]];
     const o = Math.hypot(msg.o[0] - eye[0], msg.o[1] - eye[1], msg.o[2] - eye[2]) < 3 ? msg.o : eye;
 
-    const target = this.opponent(p);
-    const targetPos = target?.alive && now >= target.invulnUntil ? target.rewound(now - p.rtt / 2 - INTERP_MS) : null;
-    let total = 0, anyHead = false, hits = 0;
+    const when = now - p.rtt / 2 - INTERP_MS;
+    const targets = this.others(p)
+      .filter((t) => t.alive && now >= t.invulnUntil)
+      .map((t) => ({ player: t, pos: t.rewound(when), total: 0, head: false, hits: 0 }));
     const ends = [];
     p.stats.shots++;
 
@@ -342,60 +520,73 @@ export class Room {
       const l = Math.hypot(raw[0], raw[1], raw[2]);
       if (l < 0.5) continue;
       const d = [raw[0] / l, raw[1] / l, raw[2] / l];
-      const worldT = rayWorld(o, d, w.range);
-      const hit = targetPos ? rayPlayer(o, d, targetPos, this.bigHead(), worldT) : null;
-      const t = hit ? hit.t : worldT;
+      let t = rayWorld(this.map, o, d, w.range);
+      let bestTarget = null, bestHit = null;
+      for (const tg of targets) {
+        const hit = rayPlayer(o, d, tg.pos, this.bigHead(), t);
+        if (hit) { t = hit.t; bestTarget = tg; bestHit = hit; }
+      }
       ends.push([round(o[0] + d[0] * t), round(o[1] + d[1] * t), round(o[2] + d[2] * t)]);
-      if (hit) {
-        hits++;
-        total += hit.head ? w.head : w.body;
-        if (hit.head) anyHead = true;
+      if (bestTarget) {
+        bestTarget.hits++;
+        bestTarget.total += bestHit.head ? w.head : w.body;
+        if (bestHit.head) bestTarget.head = true;
       }
     }
 
     const shot = JSON.stringify({ t: 'shot', id: p.id, w: w.id, o: o.map(round), ends });
     for (const q of this.players) if (q !== p) q.sendRaw(shot);
 
-    if (hits > 0) {
+    const struck = targets.filter((tg) => tg.hits > 0);
+    if (struck.length) {
       p.stats.hitShots++;
-      if (anyHead) p.stats.headshots++;
-      this.damage(target, p, total, { weapon: w.id, head: anyHead, pos: targetPos });
+      if (struck.some((tg) => tg.head)) p.stats.headshots++;
+    }
+    for (const tg of struck) {
+      if (this.state !== 'playing') return;
+      this.damage(tg.player, p, tg.total, { weapon: w.id, head: tg.head, pos: tg.pos });
     }
   }
 
   onSlap(p, msg) {
-    if (!this.isPlaying() || !p.alive || !validVec(msg.d)) return;
+    if (!this.isPlaying() || !p.alive || p.cat || !validVec(msg.d)) return;
     const now = Date.now();
     if (now - p.lastSlap < SLAP.cooldown * 1000 * 0.8) return;
     p.lastSlap = now;
     this.broadcast({ t: 'slapFx', id: p.id });
-    const target = this.opponent(p);
-    if (!target?.alive || now < target.invulnUntil) return;
-    const tp = target.rewound(now - p.rtt / 2 - INTERP_MS);
-    const eye = [p.pos[0], p.pos[1] + PLAYER.eye, p.pos[2]];
-    const c = [tp[0], tp[1] + 1, tp[2]];
-    const to = [c[0] - eye[0], c[1] - eye[1], c[2] - eye[2]];
-    const dist = Math.hypot(to[0], to[1], to[2]);
-    if (dist > SLAP.range) return;
-    const l = Math.hypot(msg.d[0], msg.d[1], msg.d[2]) || 1;
-    const cos = dist < 0.01 ? 1 : (to[0] * msg.d[0] + to[1] * msg.d[1] + to[2] * msg.d[2]) / (dist * l);
-    if (cos < 0.55) return;
-    const norm = [to[0] / (dist || 1), to[1] / (dist || 1), to[2] / (dist || 1)];
-    if (rayWorld(eye, norm, dist) < dist - 0.01) return;
-    this.knock(target, [norm[0] * SLAP.knock, 9, norm[2] * SLAP.knock]);
-    this.damage(target, p, SLAP.damage, { weapon: 'slap', head: false, pos: tp });
-  }
 
-  onUltra(p) {
-    if (!this.isPlaying() || !p.alive || p.aura < AURA_MAX) return;
-    p.aura = 0;
-    p.ultraUntil = Date.now() + ULTRA_MS;
-    this.broadcast({ t: 'ultra', id: p.id, on: true, ms: ULTRA_MS });
+    // 얼굴에 붙은 고양이는 무조건 떨어진다
+    const clinger = this.players.find((q) => q.cat?.latched && q.cat.target === p);
+    if (clinger) {
+      this.endUltra(clinger, true);
+      this.knock(clinger, [(clinger.pos[0] - p.pos[0]) * 6, 9, (clinger.pos[2] - p.pos[2]) * 6]);
+      this.damage(clinger, p, SLAP.damage, { weapon: 'slap', head: false, pos: clinger.pos });
+      return;
+    }
+
+    const eye = [p.pos[0], p.pos[1] + PLAYER.eye, p.pos[2]];
+    const l = Math.hypot(msg.d[0], msg.d[1], msg.d[2]) || 1;
+    let best = null;
+    for (const target of this.others(p)) {
+      if (!target.alive || now < target.invulnUntil) continue;
+      const tp = target.rewound(now - p.rtt / 2 - INTERP_MS);
+      const to = [tp[0] - eye[0], tp[1] + 1 - eye[1], tp[2] - eye[2]];
+      const dist = Math.hypot(to[0], to[1], to[2]);
+      if (dist > SLAP.range) continue;
+      const cos = dist < 0.01 ? 1 : (to[0] * msg.d[0] + to[1] * msg.d[1] + to[2] * msg.d[2]) / (dist * l);
+      if (cos < 0.55) continue;
+      const norm = [to[0] / (dist || 1), to[1] / (dist || 1), to[2] / (dist || 1)];
+      if (rayWorld(this.map, eye, norm, dist) < dist - 0.01) continue;
+      if (!best || dist < best.dist) best = { target, tp, norm, dist };
+    }
+    if (!best) return;
+    this.knock(best.target, [best.norm[0] * SLAP.knock, 9, best.norm[2] * SLAP.knock]);
+    this.damage(best.target, p, SLAP.damage, { weapon: 'slap', head: false, pos: best.tp });
   }
 
   onFell(p) {
-    if (this.isPlaying() && p.alive && p.pos[1] < FALL_Y + 8) {
-      this.kill(p, this.opponent(p), { weapon: 'fall', head: false });
+    if (this.isPlaying() && p.alive && !p.cat && p.pos[1] < this.map.fallY + 8) {
+      this.kill(p, this.creditFor(p), { weapon: 'fall', head: false });
     }
   }
 
@@ -406,17 +597,22 @@ export class Room {
   }
 
   damage(target, attacker, raw, info) {
-    if (!target?.alive || Date.now() < target.invulnUntil) return;
+    const now = Date.now();
+    if (!target?.alive || now < target.invulnUntil) return;
     let dmg = raw;
     if (!info.env) {
       if (this.event?.kind === 'sixseven') dmg = 67;
-      if (attacker?.ultraUntil) dmg *= 1.67;
+      if (attacker?.ultraKind === 'sigma') dmg *= 1.67;
     }
     dmg = round(dmg);
     target.hp = round(target.hp - dmg);
-    if (attacker && !info.env) {
-      attacker.stats.damage = round(attacker.stats.damage + dmg);
-      this.addAura(attacker, info.head ? AURA.hitHead : AURA.hitBody, info.head ? '헤드샷' : null);
+    if (attacker) {
+      if (info.weapon !== 'bomb') {
+        attacker.stats.damage = round(attacker.stats.damage + dmg);
+        target.lastHitBy = attacker;
+        target.lastHitAt = now;
+      }
+      if (!info.env) this.addAura(attacker, info.head ? AURA.hitHead : AURA.hitBody, info.head ? '헤드샷' : null);
     }
     if (target.emote === 1) this.addAura(target, AURA.farmInterrupted, '파밍 중 처맞음');
     const dead = target.hp <= 0;
@@ -430,15 +626,12 @@ export class Room {
   kill(victim, killer, info) {
     if (!victim.alive) return;
     const now = Date.now();
+    if (victim.ultraKind) this.endUltra(victim, true);
     victim.alive = false;
     victim.hp = 0;
     victim.emote = 0;
     victim.respawnAt = now + this.t.respawnMs;
     victim.stats.deaths++;
-    if (victim.ultraUntil) {
-      victim.ultraUntil = 0;
-      this.broadcast({ t: 'ultra', id: victim.id, on: false });
-    }
     const self = info.weapon === 'fall';
     this.addAura(victim, self ? AURA.fell : AURA.death, self ? '오하이오 추락' : '사망');
     if (killer) {
@@ -457,8 +650,8 @@ export class Room {
   }
 
   respawn(p) {
-    const opp = this.opponent(p);
-    this.placeAtSpawn(p, opp?.alive ? opp.pos : null);
+    const avoid = this.others(p).filter((o) => o.alive).map((o) => o.pos);
+    this.placeAtSpawn(p, avoid);
     this.broadcast({ t: 'spawn', id: p.id, pos: p.pos, yaw: p.yaw, invulnMs: this.t.invulnMs });
   }
 
@@ -470,28 +663,30 @@ export class Room {
   }
 
   endByTime() {
-    const [a, b] = this.players;
-    let winner = null;
-    if (a.kills !== b.kills) winner = a.kills > b.kills ? a : b;
-    else if (Math.round(a.aura) !== Math.round(b.aura)) winner = a.aura > b.aura ? a : b;
-    this.endMatch(winner, 'time');
+    const ranked = [...this.players].sort((a, b) => b.kills - a.kills || b.aura - a.aura);
+    const [a, b] = ranked;
+    const tie = b && a.kills === b.kills && Math.round(a.aura) === Math.round(b.aura);
+    this.endMatch(tie ? null : a, 'time');
   }
 
   endMatch(winner, reason) {
     if (this.state === 'results' || this.state === 'lobby') return;
     if (winner) winner.wins++;
+    for (const p of this.players) if (p.ultraKind) this.endUltra(p, false);
     this.state = 'results';
     this.stateUntil = Date.now() + this.t.resultsMs;
     this.event = null;
     this.bombs = [];
-    const loser = winner ? this.opponent(winner) : null;
+    this.nukes = [];
+    const runnerUp = winner ? Math.max(0, ...this.others(winner).map((p) => p.kills)) : 0;
+    const ranked = [...this.players].sort((a, b) => b.kills - a.kills || b.aura - a.aura);
     this.broadcast({
       t: 'matchEnd',
       winner: winner?.id ?? null,
       reason,
-      sixSeven: !!(winner && loser && winner.kills === 7 && loser.kills === 6),
+      sixSeven: !!(winner && winner.kills === 7 && runnerUp === 6),
       resultsMs: this.t.resultsMs,
-      players: this.players.map((p) => ({
+      players: ranked.map((p) => ({
         id: p.id, name: p.name, skin: p.skin, kills: p.kills, wins: p.wins,
         aura: Math.round(p.aura), stats: p.stats,
       })),
@@ -507,7 +702,6 @@ export class Room {
   }
 
   snapshot(now) {
-    this.seq++;
     this.broadcast({
       t: 'snap',
       s: now,
@@ -515,7 +709,7 @@ export class Room {
       players: this.players.map((p) => ({
         id: p.id, p: p.pos.map(round), y: round(p.yaw), pi: round(p.pitch),
         w: p.weapon, e: p.emote, hp: Math.max(0, Math.round(p.hp * 10) / 10), aura: Math.round(p.aura),
-        k: p.kills, a: p.alive, u: !!p.ultraUntil, inv: now < p.invulnUntil,
+        k: p.kills, a: p.alive, u: !!p.ultraKind, inv: now < p.invulnUntil,
       })),
     });
   }
