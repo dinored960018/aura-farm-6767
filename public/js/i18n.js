@@ -140,7 +140,7 @@ const en = {
   'weapon.fart': 'Fart SMG', 'weapon.six7': '67 Revolver', 'weapon.boom': 'Vine Boom Shotgun', 'weapon.laser': 'Eye Laser',
   'label.fart': '💨 Fart', 'label.six7': '🤌 67', 'label.boom': '📢 Vine Boom', 'label.slap': '🖐️ Slap', 'label.bomb': '🐶 Airstrike', 'label.fall': '🕳️ Fall',
   'label.claw': '🐾 Claws', 'label.nuke': '☢️ Nuke', 'label.laser': '👁️ Laser', 'label.flush': '🚽 Flush', 'label.bark': '🎙️ Bark', 'label.hero': '🦸 Punch', 'label.tung': '🥁 Sahur',
-  'event.dogfight': '🐶✈️ BOMBARDIRO DOGGILO AIRSTRIKE!!', 'event.sixseven': '6️⃣7️⃣ 67 TIME: all damage is 67', 'event.bighead': '🗿 BIG HEAD ERA: huge headshots', 'event.moon': '🌙 Ohio low gravity',
+  'event.dogfight': '🐶✈️ AIR DOG SQUADRON STRIKE!!', 'event.sixseven': '6️⃣7️⃣ 67 TIME: all damage is 67', 'event.bighead': '🗿 BIG HEAD ERA: huge headshots', 'event.moon': '🌙 Ohio low gravity',
   'eventSay.dogfight': 'air dog raid', 'eventSay.sixseven': 'six seven, six seven', 'eventSay.bighead': 'big head era', 'eventSay.moon': 'only in ohio',
   'map.ohio': 'Ohio Pit', 'mapDesc.ohio': 'Center pit + floating prime spot',
   'map.roof': 'Sigma Rooftop', 'mapDesc.roof': 'No walls. Get pushed, fall.',
