@@ -1,12 +1,14 @@
 // 3D 세계와 1인칭 조작. 서버 메시지를 받아 눈깔을 튀어나오게 한다.
 import * as THREE from 'three';
 import {
-  WEAPONS, LASER, CHILL, MOVE, PLAYER, SLAP, BOMB, AURA_MAX, INTERP_MS, MATCH_SECONDS, TICK_HZ,
+  SKINS, WEAPONS, LASER, CHILL, MOVE, PLAYER, SLAP, BOMB, AURA_MAX, INTERP_MS, MATCH_SECONDS, TICK_HZ,
 } from '../shared/constants.js';
 import { MAPS, DEFAULT_MAP, rayWorld, rayPlayer } from '../shared/map.js';
 import { newBody, stepBodyFixed } from '../shared/physics.js';
-import { Character, glowTexture } from './character.js';
+import { Character, glowTexture, flashTexture, softTexture, toon, setRim, setOutlines } from './character.js';
 import { Effects, textTexture } from './effects.js';
+import { Pipeline } from './render.js';
+import { LOOK, decorateWorld, mergeBoxes } from './worldfx.js';
 import { lines, pick } from './memes.js';
 import { t, ttsLang, signLines } from './i18n.js';
 
@@ -19,7 +21,7 @@ const lerpAngle = (a, b, k) => {
   return a + d * k;
 };
 
-function gridTexture({ base, line, label = null, checker = false, windows = false }, size = 256) {
+function gridTexture({ base, line, label = null, checker = false, windows = false }, size = 512) {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const x = c.getContext('2d');
@@ -38,8 +40,22 @@ function gridTexture({ base, line, label = null, checker = false, windows = fals
     x.fillRect(size / 2, size / 2, size / 2, size / 2);
   } else {
     x.strokeStyle = line;
-    x.lineWidth = 8;
+    x.lineWidth = 12;
     x.strokeRect(0, 0, size, size);
+    // 패널 모서리 나사
+    x.fillStyle = line;
+    for (const px of [26, size - 26]) for (const py of [26, size - 26]) { x.beginPath(); x.arc(px, py, 7, 0, 7); x.fill(); }
+  }
+  // 줄눈 빛과 때: 평면 색이 아니라 뭔가 만든 벽처럼 보이게
+  x.strokeStyle = 'rgba(255,255,255,.14)';
+  x.lineWidth = 3;
+  x.strokeRect(9, 9, size - 18, size - 18);
+  for (let i = 0; i < 420; i++) {
+    x.fillStyle = i % 2 ? 'rgba(0,0,0,.018)' : 'rgba(255,255,255,.014)';
+    const r = 1 + Math.random() * 40;
+    x.beginPath();
+    x.arc(Math.random() * size, Math.random() * size, r, 0, 7);
+    x.fill();
   }
   if (label) {
     x.fillStyle = 'rgba(255,255,255,.2)';
@@ -51,12 +67,13 @@ function gridTexture({ base, line, label = null, checker = false, windows = fals
   }
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.anisotropy = 4;
+  t.anisotropy = 8;
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
 
-function boxMesh(b, mat, tile) {
+// 위는 밝고 아래로 갈수록 어두운 박스: 값싼 AO
+function boxGeo(b, tile, gradient = true) {
   const sx = b.max[0] - b.min[0], sy = b.max[1] - b.min[1], sz = b.max[2] - b.min[2];
   const geo = new THREE.BoxGeometry(sx, sy, sz);
   // 면 크기에 맞춰 무늬가 늘어나지 않게 UV 조정 (+x -x +y -y +z -z)
@@ -68,9 +85,17 @@ function boxMesh(b, mat, tile) {
       uv.setXY(i, uv.getX(i) * faces[f][0] / tile, uv.getY(i) * faces[f][1] / tile);
     }
   }
-  const m = new THREE.Mesh(geo, mat);
-  m.position.set(b.min[0] + sx / 2, b.min[1] + sy / 2, b.min[2] + sz / 2);
-  return m;
+  const cols = new Float32Array(uv.count * 3);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < uv.count; i++) {
+    const side = i < 8 || i >= 16;
+    const low = pos.getY(i) < 0;
+    const k = gradient && side && low ? Math.max(0.5, 0.86 - sy * 0.03) : 1;
+    cols[i * 3] = cols[i * 3 + 1] = cols[i * 3 + 2] = k;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  geo.translate(b.min[0] + sx / 2, b.min[1] + sy / 2, b.min[2] + sz / 2);
+  return geo;
 }
 
 function bannerTexture(lines, bg, fg) {
@@ -98,6 +123,33 @@ function bannerTexture(lines, bg, fg) {
   return t;
 }
 
+// 각성별 몸 입자
+const rise = (fx, p, color, { size = 0.14, r = 0.9, up = 3.2, hdr = 2.3, life = 0.9 } = {}) => {
+  const a = Math.random() * 6.283, d = r * (0.4 + Math.random() * 0.6);
+  fx.burst([p.x + Math.cos(a) * d, p.y + 0.1 + Math.random() * 1.4, p.z + Math.sin(a) * d], { n: 1, speed: 0.2, up, color, size, life, hdr, drag: 0.8, spread: 0 });
+};
+const ULTRA_FX = {
+  farm: { color: 0xffd21f, emit: (fx, p) => rise(fx, p, 0xffd21f, { size: 0.15 }) },
+  sigma: { color: 0xffc800, emit: (fx, p) => { rise(fx, p, 0xffc800); rise(fx, p, 0xffffff, { size: 0.08, up: 5 }); } },
+  minsu: { color: 0xff2030, emit: (fx, p, c) => { for (const w of c.eyeWorldPositions()) fx.burst([w.x, w.y, w.z], { n: 1, speed: 0.6, color: 0xff2030, size: 0.32, size2: 0.05, life: 0.2, hdr: 3 }); } },
+  cat: { color: 0xff7040, emit: (fx, p) => fx.burst([p.x, p.y + 1, p.z], { n: 2, speed: 2.6, color: 0xffa060, size: 0.22, size2: 0.06, life: 0.4, additive: false, alpha: 0.75, spread: 0.7 }) },
+  cone: { color: 0x7fdc5a, emit: (fx, p) => rise(fx, p, 0x7fff50, { up: 2.4 }) },
+  toilet: { color: 0x41b6ff, emit: (fx, p, c, t) => {
+    for (let i = 0; i < 3; i++) {
+      const a = t * 9 + (i * 6.283) / 3, r = 1.2 + ((t * 3 + i) % 3);
+      fx.burst([p.x + Math.cos(a) * r, p.y + 0.3, p.z + Math.sin(a) * r], { n: 1, speed: 0.3, up: 2.6, color: 0x8fdcff, size: 0.18, life: 0.5, hdr: 1.9, g: 7, spread: 0 });
+    }
+  } },
+  streamer: { color: 0xff3344, emit: (fx, p) => rise(fx, p, 0xff3344, { size: 0.12, up: 2.5 }) },
+  tung: { color: 0xffc233, emit: (fx, p) => { if (Math.random() < 0.5) fx.dust([p.x, p.y, p.z], 2, 0xc9975c); } },
+  hero: { color: 0xffd21f, emit: (fx, p) => {
+    fx.burst([p.x, p.y + 1.1, p.z], { n: 3, speed: 0.4, color: 0xffd21f, size: 0.55, size2: 0.06, life: 0.42, hdr: 2.2, spread: 0.6 });
+    fx.burst([p.x, p.y + 1.1, p.z], { n: 2, speed: 0.4, color: 0x2a60ff, size: 0.42, size2: 0.05, life: 0.5, hdr: 2.6, spread: 0.8 });
+  } },
+  rizz: { color: 0xff5fc0, emit: (fx, p) => rise(fx, p, 0xff5fc0, { size: 0.18, up: 2 }) },
+  chill: { color: 0x60c8ff, emit: (fx, p) => rise(fx, p, 0x60c8ff, { size: 0.12, up: 0.9, r: 1.7, life: 1.5 }) },
+};
+
 export class Game {
   constructor(canvas, sfx, hud) {
     this.canvas = canvas;
@@ -108,23 +160,34 @@ export class Game {
     this.mode = 'attract'; // attract | match
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.autoClear = false;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.Fog(0x4a1b6d, 45, 150);
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x333333, 2);
     this.sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
     this.sunLight.position.set(20, 40, 12);
-    this.scene.add(this.hemi, this.sunLight);
+    this.sunLight.shadow.bias = -0.0004;
+    this.sunLight.shadow.normalBias = 0.04;
+    this.sunLight.shadow.radius = 2.5;
+    this.scene.add(this.hemi, this.sunLight, this.sunLight.target);
+    // 각성한 사람 몸에서 나오는 빛
+    this.auraLight = new THREE.PointLight(0xffd21f, 0, 14, 1.5);
+    this.scene.add(this.auraLight);
     this.camera = new THREE.PerspectiveCamera(78, 16 / 9, 0.08, 500);
     this.camera.rotation.order = 'YXZ';
     this.scene.add(this.camera);
 
     this.effects = new Effects(this.scene);
     this.effects.camera = this.camera;
-    this.loadMap(DEFAULT_MAP);
+    Character.fx = {
+      landDust: (p) => this.effects.dust(p, 5),
+      poof: (p) => this.effects.poof(p),
+    };
     this.buildViewmodels();
+    this.pipeline = new Pipeline(this.renderer, this.scene, this.camera, this.vmScene, this.vmCam, (cfg) => this.applyTier(cfg));
+    this.loadMap(DEFAULT_MAP);
 
     this.chars = new Map();
     this.body = newBody();
@@ -145,6 +208,18 @@ export class Game {
     this.resize();
     window.addEventListener('resize', () => this.resize());
     this.renderer.setAnimationLoop(() => this.frame());
+  }
+
+  applyTier(cfg) {
+    const r = this.renderer;
+    r.shadowMap.enabled = cfg.shadow > 0;
+    this.sunLight.castShadow = cfg.shadow > 0;
+    if (cfg.shadow > 0) {
+      this.sunLight.shadow.mapSize.set(cfg.shadow, cfg.shadow);
+      this.sunLight.shadow.map?.dispose();
+      this.sunLight.shadow.map = null;
+    }
+    setOutlines(cfg.outline);
   }
 
   resetMatchState() {
@@ -185,6 +260,16 @@ export class Game {
     this.dashQueued = false;
     this.fovKick = 0;
     this.spin = 0;
+    this.camRoll = 0;
+    this.landDip = 0;
+    this.landDipV = 0;
+    this.swayX = 0;
+    this.swayY = 0;
+    this.lastYaw = 0;
+    this.lastPitch = 0;
+    this.vmSwitch = 0;
+    this.vmFlash = 0;
+    this.fxAcc = 0;
   }
 
   // ---------- 세계 ----------
@@ -207,6 +292,7 @@ export class Game {
     this.mapId = id;
     this.map = MAPS[id] ?? MAPS[DEFAULT_MAP];
     this.effects.map = this.map;
+    Character.map = this.map;
     this.world = new THREE.Group();
     this.worldTextures = [];
     this.scene.add(this.world);
@@ -223,7 +309,20 @@ export class Game {
     this.hemi.color.setHex(th.hemi[0]);
     this.hemi.groundColor.setHex(th.hemi[1]);
     this.hemi.intensity = th.hemi[2];
-    this.sunLight.intensity = th.sun;
+    const look = LOOK[map.id] ?? LOOK.ohio;
+    this.hemi.intensity = th.hemi[2] * look.hemiMul;
+    this.sunLight.intensity = th.sun * look.sunMul;
+    this.sunLight.color.setHex(look.sunColor);
+    const sd = look.sunDir, sl = Math.hypot(...sd), R = map.bounds + 8;
+    this.sunLight.position.set((sd[0] / sl) * 90, (sd[1] / sl) * 90, (sd[2] / sl) * 90);
+    this.sunLight.target.position.set(0, 0, 0);
+    const sc = this.sunLight.shadow.camera;
+    sc.left = sc.bottom = -R * 1.15;
+    sc.right = sc.top = R * 1.15;
+    sc.near = 5;
+    sc.far = 200;
+    sc.updateProjectionMatrix();
+    setRim(look.rim, look.rimK);
 
     const sky = document.createElement('canvas');
     sky.width = 16; sky.height = 512;
@@ -240,16 +339,32 @@ export class Game {
     ));
 
     const mats = {};
-    for (const [kind, def] of Object.entries(th.tex)) mats[kind] = new THREE.MeshLambertMaterial({ map: own(gridTexture(def)) });
-    mats.lamp = new THREE.MeshBasicMaterial({ color: 0xfffff0 });
+    for (const [kind, def] of Object.entries(th.tex)) mats[kind] = new THREE.MeshLambertMaterial({ map: own(gridTexture(def)), vertexColors: true });
+    mats.lamp = new THREE.MeshBasicMaterial({ color: 0xfffff0, vertexColors: true });
+    this.lampMat = mats.lamp;
+    // 종류별로 한 덩어리로 합쳐 그림자와 그리기 호출을 줄인다
+    const byKind = new Map();
     for (const b of map.boxes) {
       const tile = b.floor ? 4 : b.wall ? 6 : 2;
-      s.add(boxMesh(b, mats[b.kind], tile));
+      const key = b.floor ? `${b.kind}|floor` : b.kind;
+      if (!byKind.has(key)) byKind.set(key, { kind: b.kind, floor: !!b.floor, parts: [] });
+      byKind.get(key).parts.push(boxGeo(b, tile, !b.floor));
     }
-    for (const b of map.decor) s.add(boxMesh(b, mats[b.kind], b.kind === 'city' ? 8 : 2));
+    for (const { kind, floor, parts } of byKind.values()) {
+      const m = new THREE.Mesh(mergeBoxes(parts), mats[kind]);
+      m.receiveShadow = true;
+      m.castShadow = !floor && !(look.noCast ?? []).includes(kind);
+      s.add(m);
+    }
+    const decorKinds = new Map();
+    for (const b of map.decor) {
+      if (!decorKinds.has(b.kind)) decorKinds.set(b.kind, []);
+      decorKinds.get(b.kind).push(boxGeo(b, b.kind === 'city' ? 8 : 2, b.kind === 'city'));
+    }
+    for (const [kind, parts] of decorKinds) s.add(new THREE.Mesh(mergeBoxes(parts), mats[kind]));
 
     for (const [signText, bg, fg, pos, rot, w] of th.signs) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 2), new THREE.MeshBasicMaterial({ map: own(bannerTexture(signLines(signText), bg, fg)), fog: false }));
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 2), new THREE.MeshBasicMaterial({ map: own(bannerTexture(signLines(signText), bg, fg)), color: new THREE.Color(1.06, 1.06, 1.06), fog: false }));
       m.position.set(...pos);
       m.rotation.y = rot;
       s.add(m);
@@ -265,7 +380,7 @@ export class Game {
     }
 
     const tex = textTexture('67', { color: '#ffe600', stroke: '#ff0080', size: 200 });
-    this.big67 = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, fog: false }));
+    this.big67 = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: new THREE.Color(1.2, 1.2, 1.2), transparent: true, fog: false }));
     this.big67.scale.set(tex.userData.aspect * 9, 9, 1);
     this.big67.position.set(...th.big67);
     this.big67.userData.baseY = th.big67[1];
@@ -279,13 +394,25 @@ export class Game {
       );
       m.position.set(p.pos[0], p.pos[1] + 0.07, p.pos[2]);
       s.add(m);
+      m.material.color.multiplyScalar(1.5);
       const arrow = new THREE.Mesh(
         new THREE.ConeGeometry(p.radius * 0.5, 0.8, 4),
-        new THREE.MeshBasicMaterial({ color: 0xff0080, transparent: true, opacity: 0.85 }),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 0, 1.1), transparent: true, opacity: 0.9 }),
       );
-      arrow.position.set(p.pos[0], 0.9, p.pos[2]);
+      arrow.position.set(p.pos[0], p.pos[1] + 0.9, p.pos[2]);
+      arrow.userData.baseY = p.pos[1] + 0.9;
       s.add(arrow);
       this.padMeshes.push(arrow);
+      const beam = new THREE.Mesh(
+        new THREE.CylinderGeometry(p.radius * 0.95, p.radius, 3.4, 20, 1, true).translate(0, 1.7, 0),
+        new THREE.ShaderMaterial({
+          transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+          vertexShader: 'varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+          fragmentShader: 'varying vec2 vU; void main(){ gl_FragColor = vec4(vec3(1.5, 1.2, 0.2), (1.0 - vU.y) * (1.0 - vU.y) * 0.5); }',
+        }),
+      );
+      beam.position.set(p.pos[0], p.pos[1] + 0.1, p.pos[2]);
+      s.add(beam);
     }
 
     const chickenTex = textTexture('🍗', { stroke: null, size: 128, font: '"Segoe UI Emoji", sans-serif' });
@@ -296,7 +423,9 @@ export class Game {
         m.scale.set(chickenTex.userData.aspect * 1.25, 1.25, 1);
       } else {
         m = new THREE.Group();
-        m.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.55), new THREE.MeshBasicMaterial({ color: 0xffd700 })));
+        m.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.5), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.7, 0.2) })));
+        const band = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.022, 6, 36).rotateX(1.2), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 2.4, 0.8) }));
+        m.add(band);
         const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
         glow.scale.set(3.4, 3.4, 1);
         m.add(glow);
@@ -306,16 +435,27 @@ export class Game {
       s.add(m);
       return m;
     });
+    this.worldTick = decorateWorld(this, map, s, own);
   }
 
   buildViewmodels() {
     this.vmScene = new THREE.Scene();
-    this.vmScene.add(new THREE.HemisphereLight(0xffffff, 0x554488, 2.6));
+    this.vmScene.add(new THREE.HemisphereLight(0xffffff, 0x554488, 1.7));
+    const vmSun = new THREE.DirectionalLight(0xfff2e0, 1.6);
+    vmSun.position.set(-1, 2, 1);
+    this.vmScene.add(vmSun);
+    this.vmLight = new THREE.PointLight(0xffffff, 0, 3, 1.2);
+    this.vmLight.position.set(0.3, -0.05, -1);
+    this.vmScene.add(this.vmLight);
     this.vmCam = new THREE.PerspectiveCamera(58, 16 / 9, 0.01, 10);
     this.vmRoot = new THREE.Group();
     this.vmScene.add(this.vmRoot);
-    const skin = new THREE.MeshLambertMaterial({ color: 0xffd23f });
-    const L = (c) => new THREE.MeshLambertMaterial({ color: c });
+    const skin = toon(0xffd23f);
+    const sleeve = toon(0x2f6df6);
+    this.vmSkin = skin;
+    this.vmSleeve = sleeve;
+    const L = (c) => toon(c);
+    const H = (r, g, b) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b) });
     const add = (group, geo, mat, x = 0, y = 0, z = 0) => {
       const m = new THREE.Mesh(geo, mat);
       m.position.set(x, y, z);
@@ -324,15 +464,21 @@ export class Game {
     };
 
     const fist = (g, x = 0, y = -0.13, z = 0.05) => {
-      add(g, new THREE.SphereGeometry(0.075, 12, 10), skin, x, y, z);
-      const arm = add(g, new THREE.CylinderGeometry(0.05, 0.065, 0.8, 8).rotateX(1.2), skin, x + 0.04, y - 0.13, z + 0.38);
+      add(g, new THREE.SphereGeometry(0.078, 14, 10), skin, x, y, z);
+      for (let i = 0; i < 3; i++) add(g, new THREE.SphereGeometry(0.024, 8, 6), skin, x - 0.055, y + 0.035 - i * 0.034, z - 0.05);
+      add(g, new THREE.CylinderGeometry(0.052, 0.06, 0.3, 10).rotateX(1.2), skin, x + 0.015, y - 0.05, z + 0.15);
+      const arm = add(g, new THREE.CylinderGeometry(0.075, 0.09, 0.75, 12).rotateX(1.2), sleeve, x + 0.05, y - 0.19, z + 0.54);
       return arm;
     };
 
     const fart = new THREE.Group();
-    add(fart, new THREE.BoxGeometry(0.13, 0.15, 0.5), L(0x6cc644));
-    add(fart, new THREE.ConeGeometry(0.11, 0.22, 12).rotateX(-Math.PI / 2), L(0x2f7a1a), 0, 0, -0.34);
-    add(fart, new THREE.SphereGeometry(0.055, 12, 10), L(0xff66b2), 0, 0.1, 0.08).scale.set(1.2, 0.7, 1.4); // 방귀 방석
+    add(fart, new THREE.CapsuleGeometry(0.075, 0.36, 6, 16).rotateX(Math.PI / 2), L(0x6cc644));
+    add(fart, new THREE.ConeGeometry(0.115, 0.22, 16).rotateX(-Math.PI / 2), L(0x2f7a1a), 0, 0, -0.34);
+    for (const z of [-0.14, 0.02, 0.15]) add(fart, new THREE.TorusGeometry(0.078, 0.008, 6, 20), L(0x2c4a18), 0, 0, z);
+    // 빛나는 가스관
+    this.vmGas = add(fart, new THREE.CapsuleGeometry(0.021, 0.27, 4, 10).rotateX(Math.PI / 2), H(1.4, 3, 0.35), 0.074, 0.044, 0);
+    add(fart, new THREE.SphereGeometry(0.04, 12, 10), L(0xff66b2), 0, 0.092, -0.08).scale.set(1.2, 0.65, 1.4); // 방귀 방석
+    add(fart, new THREE.CylinderGeometry(0.006, 0.01, 0.035, 8), L(0xd83a8a), 0, 0.112, -0.03).rotation.x = 1.1;
     add(fart, new THREE.BoxGeometry(0.08, 0.17, 0.07), L(0x222222), 0, -0.13, 0.07);
     fist(fart);
 
@@ -341,6 +487,9 @@ export class Game {
     add(six7, new THREE.CylinderGeometry(0.052, 0.052, 0.54, 12).rotateX(Math.PI / 2), L(0xb8930a), 0, 0.03, -0.36);
     add(six7, new THREE.CylinderGeometry(0.085, 0.085, 0.13, 10).rotateX(Math.PI / 2), L(0x777777), 0, 0.01, -0.09);
     add(six7, new THREE.BoxGeometry(0.075, 0.18, 0.08), L(0x5b3210), 0, -0.13, 0.08);
+    add(six7, new THREE.BoxGeometry(0.018, 0.035, 0.018), H(3.2, 0.3, 1.2), 0, 0.105, -0.6);
+    add(six7, new THREE.BoxGeometry(0.03, 0.03, 0.07), L(0x222222), 0, 0.085, 0.06);
+    for (const z of [-0.2, -0.5]) add(six7, new THREE.TorusGeometry(0.054, 0.007, 6, 16), L(0x7a6108), 0, 0.03, z);
     const tag = textTexture('67', { color: '#ff0080', stroke: '#fff', size: 96 });
     const label = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.1), new THREE.MeshBasicMaterial({ map: tag, transparent: true, side: THREE.DoubleSide }));
     label.position.set(-0.058, 0.03, -0.05);
@@ -353,11 +502,18 @@ export class Game {
     add(boom, new THREE.ConeGeometry(0.2, 0.34, 18, 1, true).rotateX(Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0xff3d81, side: THREE.DoubleSide }), 0, 0, -0.36);
     add(boom, new THREE.CircleGeometry(0.2, 18), L(0x111111), 0, 0, -0.2);
     add(boom, new THREE.BoxGeometry(0.075, 0.16, 0.07), L(0x222222), 0, -0.12, 0.1);
+    add(boom, new THREE.TorusGeometry(0.2, 0.012, 6, 28), H(3, 0.9, 1.8), 0, 0, -0.53);
+    add(boom, new THREE.BoxGeometry(0.03, 0.05, 0.3), L(0xff3d81), 0, 0.08, 0.02);
+    add(boom, new THREE.BoxGeometry(0.02, 0.02, 0.02), H(0.3, 3, 1), 0.065, 0.02, 0.1);
     fist(boom);
 
     this.vmGuns = { fart, six7, boom };
     for (const g of Object.values(this.vmGuns)) { g.visible = false; this.vmRoot.add(g); }
     this.vmRoot.position.set(0.3, -0.27, -0.62);
+    // 총구 불꽃
+    this.vmMuzzle = new THREE.Sprite(new THREE.SpriteMaterial({ map: flashTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+    this.vmMuzzle.scale.setScalar(0.55);
+    this.vmRoot.add(this.vmMuzzle);
 
     // 싸대기 손
     const hand = new THREE.Group();
@@ -373,11 +529,14 @@ export class Game {
 
   setViewWeapon(id) {
     for (const [k, g] of Object.entries(this.vmGuns)) g.visible = k === id;
+    this.vmSwitch = 1;
+    this.vmMuzzle.position.set(0, id === 'six7' ? 0.03 : 0, id === 'fart' ? -0.48 : id === 'six7' ? -0.68 : -0.58);
   }
 
   resize() {
     const w = window.innerWidth, h = window.innerHeight;
-    this.renderer.setSize(w, h, false);
+    this.pipeline?.resize();
+    this.effects.setPointScale(h * this.renderer.getPixelRatio() * 0.72);
     this.camera.aspect = this.vmCam.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.vmCam.updateProjectionMatrix();
@@ -516,6 +675,11 @@ export class Game {
     this.loadMap(m.map);
     this.syncChars(m.players, false);
     this.me = this.chars.get(myId);
+    const myDef = SKINS[m.players.find((p) => p.id === myId)?.skin];
+    if (myDef) {
+      this.vmSkin.color.setHex(myDef.skin);
+      this.vmSleeve.color.setHex(myDef.shirt);
+    }
     for (const p of m.players) {
       const c = this.chars.get(p.id);
       c.respawn();
@@ -647,7 +811,12 @@ export class Game {
 
   onShot(m) {
     const color = { fart: 0x9be02a, six7: 0xffe600, boom: 0xff3d81, laser: 0xff1133 }[m.w];
-    for (const end of m.ends) this.effects.tracer(m.o, end, color, m.w === 'six7' || m.w === 'laser' ? 0.08 : 0.04, 0.12);
+    for (const end of m.ends) {
+      this.effects.tracer(m.o, end, color, m.w === 'six7' || m.w === 'laser' ? 0.08 : 0.04, 0.12);
+      if (m.w !== 'fart') this.effects.impact(end, color, 3);
+    }
+    this.effects.flash(m.o, color, 16, 9, 0.07);
+    if (m.id !== undefined) this.chars.get(m.id)?.fire(m.w);
     this.sfx.shoot(m.w, true);
     if (m.w === 'fart' && this.camera.position.distanceTo(new THREE.Vector3(...m.o)) > 5) this.effects.cloud(m.o, 2);
     if (m.w === 'six7' && this.camera.position.distanceTo(new THREE.Vector3(...m.ends[0])) > 7) {
@@ -659,8 +828,7 @@ export class Game {
   onSlapFx(m) {
     if (m.id !== this.myId) {
       this.sfx.whiff();
-      const c = this.chars.get(m.id);
-      if (c) c.armR.rotation.x = -3;
+      this.chars.get(m.id)?.slap();
     }
   }
 
@@ -669,13 +837,21 @@ export class Game {
     const fromMe = m.from === this.myId;
     const c = this.chars.get(m.to);
     const strength = m.head ? 1.6 : m.dmg >= 20 ? 1.2 : 0.7;
-    if (c) c.pop(strength);
+    if (c) {
+      c.pop(strength);
+      const hitAt = [m.pos[0], m.pos[1] + (m.head ? 1.75 : 1.1), m.pos[2]];
+      this.effects.burst(hitAt, { n: m.head ? 18 : 8, speed: m.head ? 8 : 5, color: m.head ? 0xffd21f : 0xff3d70, size: 0.17, life: 0.42, g: 12, drag: 1.6, hdr: 2.4 });
+      if (m.head) this.effects.flash(hitAt, 0xffd21f, 26, 7, 0.14);
+    }
     if (m.weapon === 'slap') this.sfx.slap();
     if (m.weapon === 'claw') {
       this.sfx.scratch();
+      this.effects.slash([m.pos[0], m.pos[1] + 1.4, m.pos[2]]);
+      this.effects.burst([m.pos[0], m.pos[1] + 1.4, m.pos[2]], { n: 4, speed: 3, color: 0xffb060, size: 0.22, size2: 0.1, life: 0.5, g: 4, additive: false });
       this.effects.text([m.pos[0], m.pos[1] + 2.1, m.pos[2]], pick(lines('claw')), { color: '#ff4d6d', scale: 0.9, life: 0.45 });
       if (Math.random() < 0.18) this.sfx.meow();
     }
+    if (mine) this.pipeline.hit(m.head ? 1.3 : 0.5 + m.dmg / 60);
     if (mine && m.weapon === 'claw') {
       this.shake = Math.min(1, this.shake + 0.14);
       this.hud.claws();
@@ -720,7 +896,9 @@ export class Game {
       victim.setVisibleBody(true);
       victim.die();
       this.effects.text([m.pos[0], m.pos[1] + 2.6, m.pos[2]], pick(lines('kill')), { color: '#ff2a6d', scale: 1.5, life: 1.8, rise: 1 });
-      this.effects.cloud([m.pos[0], m.pos[1] + 1.2, m.pos[2]], 10, 0xff3355);
+      this.effects.burst([m.pos[0], m.pos[1] + 1.2, m.pos[2]], { n: 30, speed: 10, up: 3, color: 0xff3d70, color2: 0xffd21f, size: 0.2, life: 0.8, g: 16, drag: 1.2, hdr: 2.4 });
+      this.effects.burst([m.pos[0], m.pos[1] + 1.2, m.pos[2]], { n: 10, speed: 2.5, up: 0.8, color: 0xff6688, color2: 0x552233, size: 0.7, size2: 1.6, life: 0.8, drag: 3, additive: false, spread: 0.7, alpha: 0.6 });
+      this.effects.flash([m.pos[0], m.pos[1] + 1.2, m.pos[2]], 0xff4066, 40, 11, 0.24);
     }
     const killerName = m.killer != null ? this.nameOf(m.killer) : t(m.weapon === 'bomb' ? 'name.plane' : 'name.gravity');
     this.hud.killFeed(m, killerName, this.nameOf(m.victim));
@@ -781,6 +959,7 @@ export class Game {
       c.root.position.set(...m.pos);
       c.lastPos.copy(c.root.position);
       c.pop(0.8);
+      this.effects.pillar(m.pos, 0x5fe0ff);
     }
     if (m.id === this.myId) {
       this.body = newBody(...m.pos);
@@ -857,6 +1036,8 @@ export class Game {
 
   onWave(m) {
     this.effects.ring(m.pos, m.radius);
+    this.effects.dust(m.pos, 14, 0xc9975c);
+    this.effects.flash([m.pos[0], m.pos[1] + 1, m.pos[2]], 0xffc233, 30, 12, 0.2);
     this.effects.text([m.pos[0], m.pos[1] + 3.4, m.pos[2]], t('fx.tung'), { color: '#ffc233', scale: 1.5, life: 0.5 });
     this.sfx.tungTung();
     const d = Math.hypot(this.body.x - m.pos[0], this.body.z - m.pos[2]);
@@ -865,7 +1046,10 @@ export class Game {
 
   onCharm(m) {
     const c = this.chars.get(m.to);
-    if (c) this.effects.text([c.root.position.x, c.root.position.y + 2.8, c.root.position.z], '💖', { scale: 1.2, life: 1.2, stroke: null });
+    if (c) {
+      this.effects.text([c.root.position.x, c.root.position.y + 2.8, c.root.position.z], '💖', { scale: 1.2, life: 1.2, stroke: null });
+      this.effects.burst([c.root.position.x, c.root.position.y + 1.4, c.root.position.z], { n: 14, speed: 2.5, up: 2, color: 0xff5fc0, size: 0.2, life: 0.9, hdr: 2.3, drag: 1 });
+    }
     if (m.to !== this.myId) return;
     this.charmUntil = performance.now() + m.ms;
     this.charmBy = m.id;
@@ -881,6 +1065,8 @@ export class Game {
     const pos = [m.pos[0] - Math.sin(m.yaw) * ahead, m.pos[1] + 1.8, m.pos[2] - Math.cos(m.yaw) * ahead];
     this.effects.ring([m.pos[0] - Math.sin(m.yaw) * 5, m.pos[1], m.pos[2] - Math.cos(m.yaw) * 5], m.range * 0.5, 0xff3344);
     this.effects.text(pos, 'WOOF!', { color: '#ff3344', scale: 1.7, life: 0.55 });
+    this.effects.flash(pos, 0xff3344, 36, 14, 0.18);
+    this.effects.burst(pos, { n: 18, speed: 13, color: 0xff3344, size: 0.2, life: 0.45, drag: 1.2, hdr: 2.6, dir: [-Math.sin(m.yaw), 0.05, -Math.cos(m.yaw)] });
     this.sfx.bark();
     const d = Math.hypot(this.body.x - m.pos[0], this.body.z - m.pos[2]);
     if (d < m.range) this.shake = Math.min(1, this.shake + 0.25);
@@ -888,7 +1074,10 @@ export class Game {
 
   onSlow(m) {
     const c = this.chars.get(m.to);
-    if (c) this.effects.text([c.root.position.x, c.root.position.y + 2.8, c.root.position.z], '😌', { scale: 1.1, life: 1.2, stroke: null });
+    if (c) {
+      this.effects.text([c.root.position.x, c.root.position.y + 2.8, c.root.position.z], '😌', { scale: 1.1, life: 1.2, stroke: null });
+      this.effects.burst([c.root.position.x, c.root.position.y + 1.2, c.root.position.z], { n: 10, speed: 1.2, up: 0.9, color: 0x60c8ff, size: 0.2, life: 1.2, hdr: 2, drag: 1 });
+    }
     if (m.to !== this.myId) return;
     this.slowUntil = performance.now() + m.ms;
     this.hud.setSlow(m.ms);
@@ -913,6 +1102,7 @@ export class Game {
   onNukeBoom(m) {
     this.effects.mushroom(m.pos, m.radius);
     this.hud.nukeFlash();
+    this.pipeline.hit(1.6);
     this.cineUntil = performance.now() + 2400;
     this.cinePos = m.pos;
     this.mouseDown = false;
@@ -962,6 +1152,12 @@ export class Game {
     if (c) {
       c.ultra = m.on;
       c.ultraKind = m.on ? m.kind : null;
+      if (m.on) {
+        const p = c.root.position, col = ULTRA_FX[m.kind]?.color ?? 0xffd21f;
+        this.effects.pillar([p.x, p.y, p.z], col, 16, 0.55);
+        this.effects.ring([p.x, p.y, p.z], 12, col);
+        this.effects.flash([p.x, p.y + 1.5, p.z], col, 28, 16, 0.3);
+      }
     }
     if (m.id === this.myId) {
       if (m.on) {
@@ -1023,12 +1219,15 @@ export class Game {
   onBoom(m) {
     this.effects.explosion(m.pos);
     this.sfx.explosion();
+    if (Math.hypot(this.body.x - m.pos[0], this.body.z - m.pos[2]) < 14) this.pipeline.hit(0.8);
     const d = Math.hypot(this.body.x - m.pos[0], this.body.z - m.pos[2]);
     if (d < 16) this.shake = Math.min(1, this.shake + (1 - d / 16) * 0.6);
   }
 
   onPickup(m) {
-    this.pickupMeshes[m.i].visible = m.active;
+    const pm = this.pickupMeshes[m.i];
+    if (pm) this.effects.burst([pm.position.x, pm.position.y, pm.position.z], { n: m.active ? 10 : 22, speed: m.active ? 2 : 6, up: 1.5, color: m.kind === 'chicken' ? 0xffa040 : 0xffd21f, size: 0.14, life: 0.7, drag: 1.5, hdr: 2.4 });
+    pm.visible = m.active;
     if (m.active) return;
     if (m.by === this.myId) {
       if (m.kind === 'chicken') {
@@ -1105,11 +1304,20 @@ export class Game {
         continue;
       }
       this.effects.tracer(muzzle, end, col, w.id === 'six7' ? 0.06 : 0.025, 0.08);
+      if (t < w.range - 0.1 && w.id !== 'fart' && (w.id !== 'boom' || Math.random() < 0.45)) this.effects.impact(end, col, w.id === 'boom' ? 3 : 8);
       if (!hit && t < w.range - 0.1 && (w.id !== 'boom' || Math.random() < 0.3)) {
         if (w.id === 'fart') this.effects.cloud(end, 1, 0xb5e02a);
         if (w.id === 'six7') this.effects.text(end, '67', { color: '#ffe600', scale: 0.8, life: 0.55, rise: 0.8 });
         if (w.id === 'boom') this.effects.text(end, '💥', { scale: 0.7, life: 0.3, stroke: null, rise: 0 });
       }
+    }
+    const muzzleCol = { fart: 0x9be02a, six7: 0xffd060, boom: 0xff3d81, laser: 0xff1133 }[w.id];
+    if (w.id !== 'laser') {
+      this.vmFlash = 0.055;
+      this.vmMuzzle.material.color.set(muzzleCol).multiplyScalar(2.8);
+      this.vmMuzzle.material.rotation = Math.random() * 6.28;
+      this.vmLight.color.set(muzzleCol);
+      this.effects.flash(muzzle, muzzleCol, w.id === 'fart' ? 8 : 22, w.id === 'fart' ? 6 : 12, 0.07);
     }
     const look = this.camera.getWorldDirection(new THREE.Vector3());
     const ahead = (d) => [o[0] + look.x * d + 0.4, o[1] + look.y * d - 0.5, o[2] + look.z * d];
@@ -1149,8 +1357,10 @@ export class Game {
   // ---------- 프레임 ----------
   frame() {
     const now = performance.now();
-    const dt = Math.min(0.05, (now - this.lastFrame) / 1000);
+    const realDt = (now - this.lastFrame) / 1000;
+    const dt = Math.min(0.05, realDt);
     this.lastFrame = now;
+    this.pipeline.watch(realDt);
     if (this.mode === 'match') this.updateMatch(dt);
     else this.updateAttract(dt);
 
@@ -1158,7 +1368,7 @@ export class Game {
     this.big67.material.rotation = Math.sin(t * 1.4) * 0.14;
     this.big67.position.y = this.big67.userData.baseY + Math.sin(t * 2) * 0.5;
     for (const [i, m] of this.padMeshes.entries()) {
-      m.position.y = 0.9 + Math.sin(t * 5 + i) * 0.25;
+      m.position.y = m.userData.baseY + Math.sin(t * 5 + i) * 0.25;
       m.rotation.y = t * 2;
     }
     for (const m of this.pickupMeshes) {
@@ -1166,14 +1376,36 @@ export class Game {
       if (m.isGroup) m.rotation.y = t * 2;
     }
     for (const c of this.chars.values()) c.update(dt);
+    this.updateCharFx(dt, t);
+    this.worldTick?.(t, dt);
     this.effects.update(dt);
 
-    this.renderer.clear();
-    this.renderer.render(this.scene, this.camera);
-    if (this.mode === 'match' && this.alive && !this.emote && !this.forced && now >= this.cineUntil) {
-      this.renderer.clearDepth();
-      this.renderer.render(this.vmScene, this.vmCam);
+    this.pipeline.render(dt, this.mode === 'match' && this.alive && !this.emote && !this.forced && now >= this.cineUntil && this.vmRoot.visible);
+  }
+
+  // 각성과 파밍 중인 몸에서 나오는 입자와 빛
+  updateCharFx(dt, t) {
+    this.fxAcc += dt;
+    const tick = this.fxAcc > 0.045;
+    if (tick) this.fxAcc = 0;
+    const fx = this.effects;
+    let lit = null;
+    for (const [id, c] of this.chars) {
+      if (c.deadT >= 0 || !c.visual.visible) continue;
+      const p = c.root.position;
+      const kind = c.ultra ? c.ultraKind : null;
+      const farming = c.emote === 1;
+      if (kind || farming) {
+        const def = kind ? ULTRA_FX[kind] : ULTRA_FX.farm;
+        if (def && (!lit || id !== this.myId)) lit = { p, color: def.color, k: kind ? 1 : 0.6 };
+        if (tick && def) def.emit(fx, p, c, t, id === this.myId);
+      }
     }
+    if (lit) {
+      this.auraLight.position.set(lit.p.x, lit.p.y + 1.5, lit.p.z);
+      this.auraLight.color.setHex(lit.color);
+      this.auraLight.intensity = (9 + Math.sin(t * 9) * 2.5) * lit.k;
+    } else this.auraLight.intensity = 0;
   }
 
   updateAttract(dt) {
@@ -1303,8 +1535,21 @@ export class Game {
       if (e === 'jump') this.sfx.quack();
       if (e === 'doubleJump') { this.sfx.quack(); this.sfx.boing(); this.spin = Math.PI * 2; }
       if (e === 'pad') { this.sfx.boing(true); this.hud.shout(t('shout.pad'), 'gold'); }
-      if (e === 'dash') { this.sfx.dash(); this.fovKick = 12; }
-      if (e === 'land') this.sfx.land();
+      if (e === 'dash') {
+        this.sfx.dash();
+        this.fovKick = 12;
+        const moveLen = Math.hypot(this.body.vx, this.body.vz) || 1;
+        this.effects.burst([this.body.x, this.body.y + 0.9, this.body.z], { n: 14, speed: 9, color: 0xbfeaff, size: 0.12, life: 0.3, hdr: 2.2, spread: 1.2, dir: [-this.body.vx / moveLen, 0, -this.body.vz / moveLen] });
+        this.effects.dust([this.body.x, this.body.y, this.body.z], 6);
+      }
+      if (e === 'land') {
+        this.sfx.land();
+        this.landDipV = -1.3;
+        this.vmRoot.position.y -= 0.03;
+        this.effects.dust([this.body.x, this.body.y, this.body.z], 7);
+      }
+      if (e === 'jump' || e === 'doubleJump') this.effects.dust([this.body.x, this.body.y, this.body.z], e === 'jump' ? 4 : 9, e === 'jump' ? 0xd8c8b8 : 0xffd21f);
+      if (e === 'pad') this.effects.pillar([this.body.x, this.body.y, this.body.z], 0xffe600, 8, 0.5);
     }
     const speed = Math.hypot(this.body.vx, this.body.vz);
     if (this.body.onGround && speed > 3) {
@@ -1339,7 +1584,8 @@ export class Game {
   updateCameraBase(dt) {
     const cam = this.camera;
     const fovBase = this.zoom ? 46 : 80;
-    const want = fovBase + this.fovKick + (this.ultra ? 8 : 0);
+    const runFov = this.zoom ? 0 : Math.min(1, Math.hypot(this.body.vx, this.body.vz) / 14) * 3;
+    const want = fovBase + runFov + this.fovKick + (this.ultra ? 8 : 0);
     if (Math.abs(cam.fov - want) > 0.05) {
       cam.fov += (want - cam.fov) * Math.min(1, dt * 12);
       cam.updateProjectionMatrix();
@@ -1375,12 +1621,17 @@ export class Game {
     }
 
     if (this.spin > 0) this.spin = Math.max(0, this.spin - dt * 13);
-    cam.position.set(this.body.x, this.body.y + PLAYER.eye, this.body.z);
+    // 착지하면 살짝 꺼지고, 옆으로 뛰면 살짝 기운다
+    this.landDipV += (-120 * this.landDip - 16 * this.landDipV) * dt;
+    this.landDip += this.landDipV * dt;
+    const strafe = (this.body.vx * Math.cos(this.yaw) - this.body.vz * Math.sin(this.yaw));
+    this.camRoll += (clamp(strafe * -0.0028, -0.035, 0.035) - this.camRoll) * Math.min(1, dt * 8);
+    cam.position.set(this.body.x, this.body.y + PLAYER.eye + this.landDip, this.body.z);
     const shakeA = this.shake * this.shake * 0.05;
     cam.rotation.set(
       this.pitch + (Math.random() - 0.5) * shakeA,
       this.yaw + (Math.random() - 0.5) * shakeA,
-      (Math.random() - 0.5) * shakeA + this.spin * 0.02,
+      (Math.random() - 0.5) * shakeA + this.spin * 0.02 + this.camRoll,
     );
     cam.updateMatrixWorld();
   }
@@ -1390,13 +1641,32 @@ export class Game {
     const t = performance.now() / 1000;
     const bob = this.body.onGround ? Math.min(1, speed / 9) : 0.2;
     const baseX = this.zoom ? 0.02 : 0.3;
-    const baseY = this.zoom ? -0.2 : -0.27;
+    const baseY = this.zoom ? -0.2 : -0.27 - Math.min(1, speed / 14) * 0.02;
     const vm = this.vmRoot;
     vm.position.x += ((baseX + Math.cos(t * 9) * 0.02 * bob) - vm.position.x) * Math.min(1, dt * 14);
     vm.position.y = baseY + Math.abs(Math.sin(t * 9)) * 0.022 * bob - (this.body.vy * 0.002);
     vm.position.z = -0.62 + this.recoil * 0.12;
-    vm.rotation.x = this.recoil * 0.28;
-    vm.rotation.y = 0;
+    // 조준을 돌리면 총이 늦게 따라오고, 뛰면 숙인다
+    let dy = this.yaw - this.lastYaw;
+    while (dy > Math.PI) dy -= Math.PI * 2;
+    while (dy < -Math.PI) dy += Math.PI * 2;
+    const dp = this.pitch - this.lastPitch;
+    this.lastYaw = this.yaw;
+    this.lastPitch = this.pitch;
+    const inv = 1 / Math.max(dt, 0.001);
+    this.swayX += (clamp(dy * inv * 0.022, -0.16, 0.16) - this.swayX) * Math.min(1, dt * 11);
+    this.swayY += (clamp(dp * inv * 0.02, -0.12, 0.12) - this.swayY) * Math.min(1, dt * 11);
+    vm.position.x += this.swayX * 0.1;
+    vm.position.y += this.swayY * 0.1;
+    this.vmSwitch = Math.max(0, this.vmSwitch - dt * 5.2);
+    const sw = this.vmSwitch * this.vmSwitch;
+    vm.position.y -= sw * 0.42;
+    vm.rotation.x = this.recoil * 0.28 + this.swayY + sw * -0.9;
+    vm.rotation.y = this.swayX;
+    this.vmFlash = Math.max(0, this.vmFlash - dt);
+    this.vmMuzzle.material.opacity = this.vmFlash > 0 ? 1 : 0;
+    this.vmLight.intensity = this.vmFlash > 0 ? 4 : 0;
+    if (this.vmGas) this.vmGas.material.color.setRGB(1.4, 2.4 + Math.sin(t * 5) * 0.8, 0.35);
     const w = WEAPONS[this.weapon];
     if (this.reloadT > 0) {
       const k = 1 - this.reloadT / w.reload;

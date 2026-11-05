@@ -9,6 +9,7 @@ import { createHub } from './hub.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MOUNTS = [
   ['/vendor/three/', path.join(ROOT, 'node_modules/three/build')],
+  ['/vendor/three-addons/', path.join(ROOT, 'node_modules/three/examples/jsm')],
   ['/vendor/peerjs/', path.join(ROOT, 'node_modules/peerjs/dist')],
   ['/shared/', path.join(ROOT, 'shared')],
   ['/server/', path.join(ROOT, 'server')],

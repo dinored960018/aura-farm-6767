@@ -17,6 +17,11 @@ fs.mkdirSync(path.join(dist, 'vendor/three'), { recursive: true });
 for (const f of ['three.module.js', 'three.core.js']) {
   fs.copyFileSync(path.join(root, 'node_modules/three/build', f), path.join(dist, 'vendor/three', f));
 }
+for (const f of ['postprocessing/EffectComposer.js', 'postprocessing/RenderPass.js', 'postprocessing/ShaderPass.js', 'postprocessing/UnrealBloomPass.js', 'postprocessing/MaskPass.js', 'postprocessing/Pass.js', 'shaders/CopyShader.js', 'shaders/LuminosityHighPassShader.js']) {
+  const to = path.join(dist, 'vendor/three-addons', f);
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  fs.copyFileSync(path.join(root, 'node_modules/three/examples/jsm', f), to);
+}
 fs.mkdirSync(path.join(dist, 'vendor/peerjs'));
 fs.copyFileSync(path.join(root, 'node_modules/peerjs/dist/peerjs.min.js'), path.join(dist, 'vendor/peerjs/peerjs.min.js'));
 // 모든 상대 경로 import에 배포 버전을 붙인다
