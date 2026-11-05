@@ -1,7 +1,7 @@
 // 방 하나 = 대기실 + 경기 1판 (개인전, 2~4명). 서버가 체력·킬·아우라·판정을 전부 결정한다.
 import {
   TICK_HZ, MAX_HP, WIN_KILLS, MATCH_SECONDS, AURA_MAX, INTERP_MS, MAX_PLAYERS,
-  WEAPONS, LASER, SLAP, AURA, CHICKEN_HEAL, BOMB, NUKE, CAT, FLUSH, BARK, HERO, CHILL, TUNG, RIZZ, ULTRAS, EVENTS, EVENT_IDS, PLAYER, DEFAULT_TIMINGS, SKIN_IDS,
+  WEAPONS, LASER, SLAP, AURA, CHICKEN_HEAL, BOMB, NUKE, FALLOUT, SIGMA, CAT, FLUSH, BARK, HERO, CHILL, TUNG, RIZZ, ULTRAS, EVENTS, EVENT_IDS, PLAYER, DEFAULT_TIMINGS, SKIN_IDS,
 } from '../shared/constants.js';
 import { MAPS, MAP_IDS, DEFAULT_MAP, pickSpawn, rayWorld, rayPlayer, groundAt } from '../shared/map.js';
 import { Bot } from './bot.js';
@@ -11,6 +11,7 @@ const validVec = (v) => Array.isArray(v) && v.length === 3 && v.every(finite);
 const round = (n) => Math.round(n * 100) / 100;
 const BOT_NAMES = ['AI Minsu', 'Practice NPC', 'Bot Rocks', 'Ohio Bot', 'Payroll Bot', 'Skill Issue', 'Intern Bot'];
 const CREDIT_MS = 8000;
+const now0 = () => Date.now();
 
 export class Room {
   constructor(id, name, hub, timings = {}) {
@@ -27,6 +28,7 @@ export class Room {
     this.pickups = [];
     this.bombs = [];
     this.nukes = [];
+    this.fallouts = [];
     this.event = null;
     this.nextEventAt = 0;
   }
@@ -169,6 +171,7 @@ export class Room {
     this.event = null;
     this.bombs = [];
     this.nukes = [];
+    this.fallouts = [];
     this.nextEventAt = now + this.t.countdownMs + this.t.eventFirstMs;
     this.matchEndsAt = now + this.t.countdownMs + MATCH_SECONDS * 1000;
     this.pickups = this.map.pickups.map((p) => ({ ...p, active: true, respawnAt: 0 }));
@@ -251,6 +254,9 @@ export class Room {
       if (this.state !== 'playing') return;
       if (p.alive && (p.ultraKind === 'streamer' || p.ultraKind === 'tung')) this.tickContact(p, now);
       if (this.state !== 'playing') return;
+      if (p.alive && p.ultraKind === 'rizz') this.tickRizz(p, now);
+      if (this.state !== 'playing') return;
+      if (p.alive && p.ultraKind === 'chill') p.hp = Math.min(MAX_HP, round(p.hp + CHILL.regenPerSec * dt));
       if (p.alive && p.emote === 1 && now - p.movedAt > 150) {
         this.addAura(p, AURA.farmPerSec * dt, null);
       }
@@ -269,6 +275,8 @@ export class Room {
     this.tickBombs(now);
     if (this.state !== 'playing') return;
     this.tickNukes(now);
+    if (this.state !== 'playing') return;
+    this.tickFallouts(now);
     if (this.state !== 'playing') return;
     this.tickEvents(now);
     if (now >= this.matchEndsAt) this.endByTime();
@@ -338,6 +346,9 @@ export class Room {
     p.ultraKind = kind;
     p.ultraUntil = now + def.ms;
     p.emote = 0;
+    p.waveN = 0;
+    p.ultraTick = 0;
+    p.rizzTick = 0;
     this.broadcast({ t: 'ultra', id: p.id, on: true, ms: def.ms, kind });
     if (kind === 'cat') {
       p.cat = { target: null, latched: false, start: [...p.pos], nextTick: 0 };
@@ -366,6 +377,7 @@ export class Room {
   endUltra(p, notify) {
     if (!p.ultraKind) return;
     const c = p.cat;
+    const wasFlush = p.flush && notify && p.alive && now0() >= p.ultraUntil;
     p.cat = null;
     p.flush = null;
     p.ultraKind = null;
@@ -376,6 +388,51 @@ export class Room {
       p.teleport(landing);
     }
     if (notify) this.broadcast({ t: 'ultra', id: p.id, on: false });
+    if (wasFlush) this.geyser(p);
+  }
+
+  // 변기맨 마무리: 물기둥
+  geyser(p) {
+    this.broadcast({ t: 'geyser', id: p.id, pos: p.pos.map(round), radius: FLUSH.geyserRadius });
+    for (const q of this.others(p)) {
+      if (!q.alive) continue;
+      const dx = q.pos[0] - p.pos[0], dz = q.pos[2] - p.pos[2];
+      const d = Math.hypot(dx, dz) || 1;
+      if (d > FLUSH.geyserRadius || Math.abs(q.pos[1] - p.pos[1]) > 8) continue;
+      this.knock(q, [dx / d * 6, FLUSH.geyserUp, dz / d * 6]);
+      this.damage(q, p, FLUSH.geyserDamage, { weapon: 'flush', head: false, env: true, pos: q.pos });
+      if (this.state !== 'playing') return;
+    }
+  }
+
+  // 리즈왕: 코앞까지 걸어온 상대의 아우라와 체력을 뺏는다
+  tickRizz(p, now) {
+    if (now < p.rizzTick) return;
+    p.rizzTick = now + RIZZ.tickMs;
+    for (const q of this.others(p)) {
+      if (!q.alive || q.charmBy !== p || now >= q.charmUntil) continue;
+      if (Math.hypot(q.pos[0] - p.pos[0], q.pos[2] - p.pos[2]) > RIZZ.kissRange) continue;
+      this.addAura(q, -RIZZ.auraDrain, null);
+      this.addAura(p, RIZZ.auraDrain, null);
+      p.hp = Math.min(MAX_HP, round(p.hp + RIZZ.heal));
+      this.damage(q, p, RIZZ.damage, { weapon: 'rizz', head: false, env: true, pos: q.pos });
+      if (this.state !== 'playing') return;
+    }
+  }
+
+  tickFallouts(now) {
+    if (!this.fallouts.length) return;
+    this.fallouts = this.fallouts.filter((f) => now < f.until);
+    for (const f of this.fallouts) {
+      if (now < f.next) continue;
+      f.next = now + FALLOUT.tickMs;
+      for (const q of [...this.players]) {
+        if (q === f.owner || !q.alive) continue;
+        if (Math.hypot(q.pos[0] - f.pos[0], q.pos[2] - f.pos[2]) > FALLOUT.radius || Math.abs(q.pos[1] - f.pos[1]) > 6) continue;
+        this.damage(q, this.players.includes(f.owner) ? f.owner : null, FALLOUT.damage, { weapon: 'nuke', head: false, env: true, pos: q.pos });
+        if (this.state !== 'playing') return;
+      }
+    }
   }
 
   nearestAlive(p) {
@@ -419,6 +476,8 @@ export class Room {
       p.yaw = t.yaw + Math.PI;
       if (now >= c.nextTick) {
         c.nextTick = now + CAT.tickMs;
+        const stolen = Math.min(t.aura, CAT.auraSteal);
+        if (stolen > 0) { this.addAura(t, -stolen, null); this.addAura(p, stolen, null); }
         this.damage(t, p, CAT.damage, { weapon: 'claw', head: false, env: true, pos: t.pos });
       }
     }
@@ -434,10 +493,12 @@ export class Room {
     const tung = p.ultraKind === 'tung';
     const def = tung ? TUNG : BARK;
     p.ultraTick = now + def.tickMs;
+    p.waveN = (p.waveN ?? 0) + 1;
+    const final = p.waveN >= def.count;
     const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
-    if (tung) this.broadcast({ t: 'wave', id: p.id, pos: p.pos.map(round), radius: TUNG.radius });
-    else this.broadcast({ t: 'bark', id: p.id, pos: p.pos.map(round), yaw: round(p.yaw), range: BARK.range });
-    const reach = tung ? TUNG.radius : BARK.range;
+    const reach = tung ? (final ? TUNG.finalRadius : TUNG.radius + (p.waveN - 1) * TUNG.radiusStep) : BARK.range;
+    if (tung) this.broadcast({ t: 'wave', id: p.id, pos: p.pos.map(round), radius: reach, n: p.waveN, final });
+    else this.broadcast({ t: 'bark', id: p.id, pos: p.pos.map(round), yaw: round(p.yaw), range: BARK.range, final });
     const eye = [p.pos[0], p.pos[1] + PLAYER.eye, p.pos[2]];
     for (const q of this.others(p)) {
       if (!q.alive || now < q.invulnUntil) continue;
@@ -445,13 +506,14 @@ export class Room {
       const d = Math.hypot(dx, dz) || 1;
       if (d > reach || Math.abs(q.pos[1] - p.pos[1]) > 6) continue;
       if (!tung) {
-        if ((dx * fx + dz * fz) / d < BARK.cone) continue;
+        if (!final && (dx * fx + dz * fz) / d < BARK.cone) continue;
         const to = [dx, q.pos[1] + 1 - eye[1], dz];
         const l = Math.hypot(to[0], to[1], to[2]) || 1;
         if (rayWorld(this.map, eye, [to[0] / l, to[1] / l, to[2] / l], l) < l - 0.05) continue; // 벽 뒤는 안 들림
       }
-      this.knock(q, [dx / d * def.knock, 9, dz / d * def.knock]);
-      this.damage(q, p, def.damage, { weapon: tung ? 'tung' : 'bark', head: false, env: true, pos: q.pos });
+      const kn = final ? def.finalKnock : def.knock;
+      this.knock(q, [dx / d * kn, final ? 15 : 9, dz / d * kn]);
+      this.damage(q, p, final ? def.finalDamage : def.damage, { weapon: tung ? 'tung' : 'bark', head: false, env: true, pos: q.pos });
       if (this.state !== 'playing') return;
     }
   }
@@ -481,8 +543,16 @@ export class Room {
       c.hits++;
       c.landing = [...t.pos];
       this.knock(t, [(to[0] / d) * HERO.knock, 12, (to[2] / d) * HERO.knock]);
-      this.damage(t, p, HERO.damage, { weapon: 'hero', head: false, env: true, pos: t.pos });
+      this.damage(t, p, HERO.damage[Math.min(c.hits - 1, HERO.damage.length - 1)], { weapon: 'hero', head: false, env: true, pos: t.pos });
       if (this.state !== 'playing' || !p.cat) return;
+      this.broadcast({ t: 'punch', id: p.id, pos: t.pos.map(round), n: c.hits });
+      for (const q of this.others(p)) {
+        if (q === t || !q.alive || c.done.has(q)) continue;
+        const sd = Math.hypot(q.pos[0] - t.pos[0], q.pos[1] - t.pos[1], q.pos[2] - t.pos[2]);
+        if (sd > HERO.splashRadius) continue;
+        this.damage(q, p, HERO.splashDamage, { weapon: 'hero', head: false, env: true, pos: q.pos });
+        if (this.state !== 'playing' || !p.cat) return;
+      }
       if (c.hits >= HERO.hits) { this.endUltra(p, true); return; }
     }
     p.movedAt = now;
@@ -540,6 +610,8 @@ export class Room {
         this.damage(q, owner, NUKE.damage * k * (covered ? 0.5 : 1), { weapon: 'nuke', head: false, env: true, pos: q.pos });
         if (this.state !== 'playing') return;
       }
+      this.fallouts.push({ pos: n.pos, owner: n.owner, until: now + FALLOUT.ms, next: now + FALLOUT.tickMs });
+      this.broadcast({ t: 'fallout', pos: n.pos, radius: FALLOUT.radius, ms: FALLOUT.ms });
     }
   }
 
@@ -611,11 +683,16 @@ export class Room {
       const l = Math.hypot(raw[0], raw[1], raw[2]);
       if (l < 0.5) continue;
       const d = [raw[0] / l, raw[1] / l, raw[2] / l];
-      let t = rayWorld(this.map, o, d, w.range);
+      let t = w.pierce ? w.range : rayWorld(this.map, o, d, w.range);
       let bestTarget = null, bestHit = null;
       for (const tg of targets) {
         const hit = rayPlayer(o, d, tg.pos, this.bigHead(), t);
-        if (hit) { t = hit.t; bestTarget = tg; bestHit = hit; }
+        if (!hit) continue;
+        if (w.pierce) {
+          tg.hits++;
+          tg.total += hit.head ? w.head : w.body;
+          if (hit.head) tg.head = true;
+        } else { t = hit.t; bestTarget = tg; bestHit = hit; }
       }
       ends.push([round(o[0] + d[0] * t), round(o[1] + d[1] * t), round(o[2] + d[2] * t)]);
       if (bestTarget) {
@@ -684,6 +761,7 @@ export class Room {
 
   // ---------- 판정 결과 ----------
   knock(p, v) {
+    if (p.ultraKind === 'sigma') return; // 시그마는 안 밀린다
     if (p.isBot) p.applyKnock(v);
     else p.send({ t: 'knock', v: v.map(round) });
   }
@@ -691,7 +769,14 @@ export class Room {
   damage(target, attacker, raw, info) {
     const now = Date.now();
     if (!target?.alive || now < target.invulnUntil) return;
-    if (target.ultraKind === 'chill') return; // 너무 칠해서 안 맞음
+    if (target.ultraKind === 'hero') return; // 날아가는 동안 무적
+    if (target.ultraKind === 'chill') {
+      // 너무 칠해서 안 맞고, 쏜 사람한테 되돌아간다
+      if (attacker && attacker !== target && !info.env && attacker.ultraKind !== 'chill') {
+        this.damage(attacker, target, raw * CHILL.reflect, { weapon: 'reflect', head: false, env: true, pos: attacker.pos });
+      }
+      return;
+    }
     let dmg = raw;
     if (!info.env) {
       if (this.event?.kind === 'sixseven') dmg = 67;
@@ -732,6 +817,11 @@ export class Room {
       killer.stats.streak++;
       if (killer.stats.streak > killer.stats.bestStreak) killer.stats.bestStreak = killer.stats.streak;
       if (!self && info.weapon !== 'bomb') this.addAura(killer, AURA.kill, 'kill');
+      if (killer.ultraKind === 'sigma' && killer.alive) {
+        killer.ultraUntil += SIGMA.killExtendMs;
+        killer.hp = Math.min(MAX_HP, killer.hp + SIGMA.killHeal);
+        this.broadcast({ t: 'ultraExt', id: killer.id, ms: killer.ultraUntil - now });
+      }
     }
     victim.stats.streak = 0;
     this.broadcast({
@@ -771,6 +861,7 @@ export class Room {
     this.event = null;
     this.bombs = [];
     this.nukes = [];
+    this.fallouts = [];
     const runnerUp = winner ? Math.max(0, ...this.others(winner).map((p) => p.kills)) : 0;
     const ranked = [...this.players].sort((a, b) => b.kills - a.kills || b.aura - a.aura);
     this.broadcast({

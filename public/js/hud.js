@@ -2,6 +2,7 @@
 import { AURA_MAX, WEAPONS } from '../shared/constants.js';
 import { t } from './i18n.js';
 import { lines, pick } from './memes.js';
+import { faceEl } from './portraits.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -39,6 +40,12 @@ export class Hud {
     this.el.oppen.hidden = true;
     this.el.chips.replaceChildren();
     this.show(true);
+  }
+
+  setFace(skin) {
+    const box = $('hudFace');
+    box.replaceChildren();
+    if (skin) box.append(faceEl(skin, 'hudPortrait'));
   }
 
   setLockHint(v) { this.el.lock.hidden = !v; }
@@ -114,6 +121,8 @@ export class Hud {
       n.textContent = this.names.get(r.id) ?? '???';
       const b = document.createElement('b');
       b.textContent = r.k;
+      const skin = g.chars.get(r.id)?.skinId;
+      if (skin) chip.append(faceEl(skin, 'chipFace'));
       chip.append(n, b);
       return chip;
     }));
@@ -266,11 +275,20 @@ export class Hud {
     this.restart(this.el.flash, 'show');
   }
 
-  setUltra(on, ms, name) {
+  setUltra(on, ms, name, color) {
     this.el.ultra.hidden = !on;
     if (name) this.el.ultraLabel.textContent = name;
+    if (color !== undefined) this.el.ultra.style.setProperty('--u', `#${color.toString(16).padStart(6, '0')}`);
     clearTimeout(this.ultraTimer);
-    if (on) this.ultraTimer = setTimeout(() => { this.el.ultra.hidden = true; }, ms);
+    if (on) {
+      this.ultraTimer = setTimeout(() => { this.el.ultra.hidden = true; }, ms);
+      const bar = $('ultraTime');
+      bar.style.transition = 'none';
+      bar.style.transform = 'scaleX(1)';
+      void bar.offsetWidth;
+      bar.style.transition = `transform ${ms}ms linear`;
+      bar.style.transform = 'scaleX(0)';
+    }
   }
 
   rain(items, n = 30) {

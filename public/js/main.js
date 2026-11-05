@@ -5,7 +5,8 @@ import { Sfx } from './audio.js';
 import { Hud } from './hud.js';
 import { Game } from './game.js';
 import { P2P, inviteCode, inviteUrl, openTransport } from './transport.js';
-import { lines, SKIN_FACE, pick } from './memes.js';
+import { lines, pick } from './memes.js';
+import { makePortraits, faceEl } from './portraits.js';
 import { t, getLang, setLang, applyStatic } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
@@ -183,6 +184,10 @@ H.knock = (m) => inMatch && game.onKnock(m);
 H.teleport = (m) => inMatch && game.onTeleport(m);
 H.cat = (m) => inMatch && game.onCat(m);
 H.wave = (m) => inMatch && game.onWave(m);
+H.fallout = (m) => inMatch && game.onFallout(m);
+H.geyser = (m) => inMatch && game.onGeyser(m);
+H.punch = (m) => inMatch && game.onPunch(m);
+H.ultraExt = (m) => inMatch && game.onUltraExt(m);
 H.charm = (m) => inMatch && game.onCharm(m);
 H.bark = (m) => inMatch && game.onBark(m);
 H.slow = (m) => inMatch && game.onSlow(m);
@@ -278,8 +283,7 @@ function renderSkins(box) {
     const b = document.createElement('button');
     b.className = `skinBtn${id === currentSkin ? ' on' : ''}`;
     b.title = t(`skin.${id}`);
-    const f = document.createElement('i');
-    f.textContent = SKIN_FACE[id];
+    const f = faceEl(id);
     const n = document.createElement('span');
     n.textContent = t(`skin.${id}`);
     b.append(f, n);
@@ -324,11 +328,11 @@ function renderRoom() {
   for (let i = 0; i < MAX_PLAYERS; i++) {
     const p = room.players[i];
     const card = document.createElement('div');
-    card.className = `slot${p?.ready ? ' ready' : ''}${p?.id === net.id ? ' me' : ''}`;
+    card.className = `slot${p ? '' : ' open'}${p?.ready ? ' ready' : ''}${p?.id === net.id ? ' me' : ''}`;
     if (p) {
       const face = document.createElement('div');
       face.className = 'face';
-      face.textContent = SKIN_FACE[p.skin] ?? '🙂';
+      face.append(faceEl(p.skin));
       const info = document.createElement('div');
       const nm = document.createElement('strong');
       nm.textContent = p.name + (p.id === net.id ? t('room.me') : '') + (p.isBot ? ' 🤖' : '');
@@ -366,7 +370,15 @@ function renderRoom() {
 
 function showSkinDesc() {
   const u = ULTRAS[currentSkin];
-  $('skinDesc').textContent = u ? t('room.ultra', { name: t(`ultra.${currentSkin}`), desc: t(`ultraDesc.${currentSkin}`) }) : '';
+  const descBox = $('skinDesc');
+  descBox.replaceChildren();
+  if (u) {
+    const head = document.createElement('b');
+    head.textContent = t(`ultra.${currentSkin}`);
+    const body = document.createElement('span');
+    body.textContent = t(`ultraDesc.${currentSkin}`);
+    descBox.append(faceEl(currentSkin, 'descFace'), head, body);
+  }
 }
 
 $('readyBtn').onclick = () => {
@@ -444,7 +456,7 @@ function showResult(m) {
     const col = document.createElement('div');
     col.className = `statCol${p.id === m.winner ? ' winner' : ''}`;
     const head = document.createElement('h3');
-    head.textContent = `${SKIN_FACE[p.skin] ?? ''} ${p.name}`;
+    head.append(faceEl(p.skin, 'statFace'), document.createTextNode(p.name));
     col.append(head);
     const rows = [
       [t('stat.kills'), p.kills], [t('stat.deaths'), s.deaths], [t('stat.acc'), `${acc}%`], [t('stat.heads'), s.headshots],
@@ -569,3 +581,9 @@ game.setAttract([]);
 connect();
 
 window.__aura = { game, net, sfx, hud };
+
+// 첫 화면이 뜬 다음에 캐릭터 얼굴을 찍어 교체한다
+setTimeout(() => {
+  makePortraits();
+  if (room) { renderRoom(); renderSkins($('skinPick')); showSkinDesc(); }
+}, 60);

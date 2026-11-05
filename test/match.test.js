@@ -453,7 +453,7 @@ test('각성: 히어로는 벽 뚫고 날아가 치고 그 자리에 착지한�
   const tele = a.wait((m) => m.t === 'teleport');
   a.send({ t: 'ultra' });
   assert.equal((await hitB).dmg, 45);
-  assert.equal((await hitC).dmg, 45, '다음 상대도 친다');
+  assert.equal((await hitC).dmg, 60, '다음 상대는 더 세게 친다');
   await off;
   assert.deepEqual((await tele).pos, cp, '마지막 상대 자리에 착지');
   await close();
@@ -573,4 +573,75 @@ test('레이: 벽 뒤 상대는 안 맞고, 뚫린 곳은 맞는다', () => {
   assert.ok(w < 8);
   assert.ok(rayPlayer(o, nd, [-16, 0, 0], false, w), '벽 앞 상대는 맞아야 함');
   assert.equal(rayPlayer(o, nd, [-12, 0, 0], false, w), null, '벽 뒤 상대는 안 맞아야 함');
+});
+
+test('각성 특징: 칠가이는 총알을 되돌리고, 시그마는 킬마다 시간이 늘어난다', async () => {
+  const s = await ultraRoom('chill');
+  s.a.send({ t: 'ultra' });
+  await sleep(40);
+  const back = s.b.wait((m) => m.t === 'hit' && m.weapon === 'reflect' && m.to === s.b.id);
+  const { o, d } = aimAt(s.bp, s.ap);
+  s.b.send({ t: 'shoot', w: 'six7', o, dirs: [d] });
+  assert.ok((await back).dmg > 0, '쏜 사람이 맞는다');
+  await s.close();
+
+  const g = await ultraRoom('sigma');
+  const pa = playerOf(g.a), pb = playerOf(g.b);
+  g.a.send({ t: 'ultra' });
+  await sleep(40);
+  const until = pa.ultraUntil;
+  pa.hp = 40;
+  const ext = g.a.wait((m) => m.t === 'ultraExt');
+  pb.hp = 1;
+  const shot = aimAt(g.ap, g.bp);
+  g.a.send({ t: 'shoot', w: 'six7', o: shot.o, dirs: [shot.d] });
+  await ext;
+  assert.ok(pa.ultraUntil > until, '시간 연장');
+  assert.ok(pa.hp > 40, '회복');
+  await g.close();
+});
+
+test('각성 특징: 사후르 7번째가 제일 크고, 핵은 방사능을 남기며, 민수 레이저는 벽을 뚫는다', async () => {
+  const t = await ultraRoom('tung');
+  const waves = [];
+  const done = new Promise((res) => {
+    const orig = t.b.ws;
+    void orig;
+    const loop = async () => {
+      for (;;) {
+        const w = await t.b.wait((m) => m.t === 'wave');
+        waves.push(w);
+        if (w.final) { res(); return; }
+      }
+    };
+    loop();
+  });
+  playerOf(t.b).hp = 1e6;
+  t.a.send({ t: 'ultra' });
+  await done;
+  assert.equal(waves.length, 7);
+  assert.ok(waves[6].radius > waves[0].radius * 1.5);
+  await t.close();
+
+  const n = await ultraRoom('cone');
+  const fall = n.b.wait((m) => m.t === 'fallout');
+  n.a.send({ t: 'ultra' });
+  assert.ok((await fall).radius > 0);
+  await n.close();
+
+  const m = await ultraRoom('minsu');
+  const pa = playerOf(m.a);
+  m.a.send({ t: 'ultra' });
+  await sleep(40);
+  pa.pos = [-20, 0, -40];
+  const pb = playerOf(m.b);
+  pb.pos = [-20, 0, 12];
+  pb.pushHistory?.(Date.now());
+  const hit = m.b.wait((x) => x.t === 'hit' && x.weapon === 'laser');
+  const a = aimAt([-20, 0, -26], [-20, 0, 12]);
+  m.a.send({ t: 'state', p: [-20, 0, -26], y: 0, pi: 0, w: 'fart', e: 0 });
+  await sleep(40);
+  m.a.send({ t: 'shoot', w: 'laser', o: a.o, dirs: [a.d] });
+  assert.ok((await hit).dmg > 0, '벽 건너편도 맞는다');
+  await m.close();
 });

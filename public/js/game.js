@@ -128,7 +128,7 @@ const rise = (fx, p, color, { size = 0.14, r = 0.9, up = 3.2, hdr = 2.3, life = 
   const a = Math.random() * 6.283, d = r * (0.4 + Math.random() * 0.6);
   fx.burst([p.x + Math.cos(a) * d, p.y + 0.1 + Math.random() * 1.4, p.z + Math.sin(a) * d], { n: 1, speed: 0.2, up, color, size, life, hdr, drag: 0.8, spread: 0 });
 };
-const ULTRA_FX = {
+export const ULTRA_FX = {
   farm: { color: 0xffd21f, emit: (fx, p) => rise(fx, p, 0xffd21f, { size: 0.15 }) },
   sigma: { color: 0xffc800, emit: (fx, p) => { rise(fx, p, 0xffc800); rise(fx, p, 0xffffff, { size: 0.08, up: 5 }); } },
   minsu: { color: 0xff2030, emit: (fx, p, c) => { for (const w of c.eyeWorldPositions()) fx.burst([w.x, w.y, w.z], { n: 1, speed: 0.6, color: 0xff2030, size: 0.32, size2: 0.05, life: 0.2, hdr: 3 }); } },
@@ -171,6 +171,8 @@ export class Game {
     this.sunLight.shadow.bias = -0.0004;
     this.sunLight.shadow.normalBias = 0.04;
     this.sunLight.shadow.radius = 2.5;
+    this.sunLight.shadow.autoUpdate = false;
+    this.shadowN = 0;
     this.scene.add(this.hemi, this.sunLight, this.sunLight.target);
     // 각성한 사람 몸에서 나오는 빛
     this.auraLight = new THREE.PointLight(0xffd21f, 0, 14, 1.5);
@@ -184,7 +186,9 @@ export class Game {
     Character.fx = {
       landDust: (p) => this.effects.dust(p, 5),
       poof: (p) => this.effects.poof(p),
+      tap: (p) => this.effects.tap(p),
     };
+    Character.cam = this.camera;
     this.buildViewmodels();
     this.pipeline = new Pipeline(this.renderer, this.scene, this.camera, this.vmScene, this.vmCam, (cfg) => this.applyTier(cfg));
     this.loadMap(DEFAULT_MAP);
@@ -323,6 +327,7 @@ export class Game {
     sc.far = 200;
     sc.updateProjectionMatrix();
     setRim(look.rim, look.rimK);
+    this.sunLight.shadow.needsUpdate = true;
 
     const sky = document.createElement('canvas');
     sky.width = 16; sky.height = 512;
@@ -562,7 +567,8 @@ export class Game {
     window.addEventListener('blur', () => { this.keys.clear(); this.mouseDown = false; this.zoom = false; });
     document.addEventListener('mousemove', (e) => {
       if (!this.locked || this.mode !== 'match') return;
-      const mult = this.zoom ? 0.0011 : 0.0022;
+      // 고양이가 얼굴에 붙으면 상하좌우가 뒤집힌다
+      const mult = (this.zoom ? 0.0011 : 0.0022) * (this.grabbedBy !== null ? -1 : 1);
       this.yaw -= clamp(e.movementX, -300, 300) * mult;
       this.pitch = clamp(this.pitch - clamp(e.movementY, -300, 300) * mult, -1.5, 1.5);
     });
@@ -619,16 +625,18 @@ export class Game {
   setAttract(players, mapId) {
     this.mode = 'attract';
     if (mapId) this.loadMap(mapId);
-    if (players.length === 0) players = [{ id: 'demo1', skin: 'sigma' }, { id: 'demo2', skin: 'cat' }];
+    const demo = players.length === 0;
+    if (demo) players = [{ id: 'demo1', skin: 'sigma' }, { id: 'demo2', skin: 'tung' }, { id: 'demo3', skin: 'cat' }, { id: 'demo4', skin: 'streamer' }];
     this.syncChars(players, true);
     const list = [...this.chars.values()];
     const c0 = this.map.showcase.pos;
     list.forEach((c, i) => {
-      c.root.position.set(c0[0] + (i - (list.length - 1) / 2) * 1.75, c0[1], c0[2]);
+      c.root.position.set(c0[0] + (i - (list.length - 1) / 2) * (demo ? 2.5 : 1.75), c0[1], c0[2]);
       c.lastPos.copy(c.root.position);
       c.root.rotation.y = 0;
       c.pitch = 0;
-      c.emote = i % 2 === 0 ? 2 : 1;
+      c.emote = 0;
+      c.lobby = true;
       c.ultra = false;
       c.ultraKind = null;
       c.bigHead = false;
@@ -684,6 +692,8 @@ export class Game {
       const c = this.chars.get(p.id);
       c.respawn();
       c.emote = 0;
+      c.lobby = false;
+      c.xray = false;
       c.ultra = false;
       c.ultraKind = null;
       c.bigHead = false;
@@ -697,6 +707,9 @@ export class Game {
       }
     }
     if (this.me?.tag) this.me.tag.visible = false;
+    this.pipeline.prewarm(this.effects);
+    this.sunLight.shadow.needsUpdate = true;
+    this.hud.setFace(myDef ? m.players.find((p) => p.id === myId)?.skin : null);
     m.pickups.forEach((a, i) => { this.pickupMeshes[i].visible = a; });
     this.timeLeft = m.endsIn;
     this.setHudVisible(true);
@@ -745,6 +758,7 @@ export class Game {
     this.setHudVisible(false);
     // 승패 카메라를 위해 양쪽 몸은 보이게
     this.me?.setVisibleBody(true);
+    for (const c of this.chars.values()) { if (c.tag) c.tag.visible = false; c.xray = false; }
     this.effects.clear();
     this.sfx.stopMusic();
   }
@@ -844,6 +858,12 @@ export class Game {
       if (m.head) this.effects.flash(hitAt, 0xffd21f, 26, 7, 0.14);
     }
     if (m.weapon === 'slap') this.sfx.slap();
+    if (m.weapon === 'rizz' && c) this.effects.text([m.pos[0], m.pos[1] + 2.3, m.pos[2]], pick(['😘', '💋', '💖']), { scale: 0.9, life: 0.7, stroke: null });
+    if (m.weapon === 'reflect' && c) {
+      this.effects.text([m.pos[0], m.pos[1] + 2.3, m.pos[2]], 'nah', { color: '#60c8ff', scale: 1, life: 0.6 });
+      this.effects.burst([m.pos[0], m.pos[1] + 1.2, m.pos[2]], { n: 8, speed: 5, color: 0x60c8ff, size: 0.14, life: 0.35, hdr: 2.4 });
+    }
+    if (mine && m.weapon === 'bark') this.hud.rain(['W', 'L', '💀', 'CHAT', '🐶', 'L', 'RATIO'], 7);
     if (m.weapon === 'claw') {
       this.sfx.scratch();
       this.effects.slash([m.pos[0], m.pos[1] + 1.4, m.pos[2]]);
@@ -1025,7 +1045,7 @@ export class Game {
   onCat(m) {
     if (m.to === this.myId) {
       this.setGrabbed(m.id);
-      this.hud.shout(t('shout.cat'), 'red');
+      this.hud.shout(t('shout.flipped'), 'red');
       this.sfx.meow();
       this.sfx.say(t('tts.meow'), { lang: ttsLang(), pitch: 2, rate: 1.4 });
     } else if (m.to === null && this.grabbedBy === m.id) {
@@ -1036,9 +1056,10 @@ export class Game {
 
   onWave(m) {
     this.effects.ring(m.pos, m.radius);
-    this.effects.dust(m.pos, 14, 0xc9975c);
-    this.effects.flash([m.pos[0], m.pos[1] + 1, m.pos[2]], 0xffc233, 30, 12, 0.2);
-    this.effects.text([m.pos[0], m.pos[1] + 3.4, m.pos[2]], t('fx.tung'), { color: '#ffc233', scale: 1.5, life: 0.5 });
+    this.effects.dust(m.pos, m.final ? 34 : 14, 0xc9975c);
+    this.effects.flash([m.pos[0], m.pos[1] + 1, m.pos[2]], 0xffc233, m.final ? 90 : 30, m.final ? 28 : 12, m.final ? 0.4 : 0.2);
+    this.effects.text([m.pos[0], m.pos[1] + 3.4, m.pos[2]], m.final ? 'SAHUR!!!' : t('fx.tung'), { color: m.final ? '#ff5f1f' : '#ffc233', scale: m.final ? 2.8 : 1.1 + (m.n ?? 1) * 0.12, life: m.final ? 0.9 : 0.5 });
+    if (m.final) this.effects.pillar(m.pos, 0xffc233, 12, 0.4);
     this.sfx.tungTung();
     const d = Math.hypot(this.body.x - m.pos[0], this.body.z - m.pos[2]);
     if (d < m.radius * 1.4) this.shake = Math.min(1, this.shake + 0.35);
@@ -1059,13 +1080,55 @@ export class Game {
     this.hud.shout(t('shout.charm', { name: this.nameOf(m.id) }), 'red');
   }
 
+  onFallout(m) {
+    this.effects.fallout(m.pos, m.radius, m.ms);
+  }
+
+  onGeyser(m) {
+    this.effects.geyser(m.pos, m.radius);
+    this.sfx.flush(900);
+    const d = Math.hypot(this.body.x - m.pos[0], this.body.z - m.pos[2]);
+    if (d < m.radius * 1.3) {
+      this.shake = Math.min(1, this.shake + 0.7);
+      this.pipeline.hit(0.8);
+    }
+  }
+
+  onPunch(m) {
+    this.effects.punch(m.pos, m.n);
+    this.sfx.vineBoom();
+    this.effects.text([m.pos[0], m.pos[1] + 2.8, m.pos[2]], ['POW!', 'BAM!', 'THINK!'][m.n - 1] ?? 'POW!', { color: '#ffd21f', scale: 1.3 + m.n * 0.35, life: 0.6 });
+    const d = Math.hypot(this.body.x - m.pos[0], this.body.z - m.pos[2]);
+    if (d < 25) this.shake = Math.min(1, this.shake + 0.3 + m.n * 0.12);
+    if (m.id === this.myId) this.fovKick = 10 + m.n * 5;
+  }
+
+  onUltraExt(m) {
+    const c = this.chars.get(m.id);
+    if (c) {
+      const p = c.root.position;
+      this.effects.text([p.x, p.y + 3.1, p.z], '+2s', { color: '#ffd21f', scale: 1.1, life: 0.9 });
+      this.effects.pillar([p.x, p.y, p.z], 0xffc800, 8, 0.4);
+    }
+    if (m.id === this.myId) {
+      this.hud.setUltra(true, m.ms, t('ultra.sigma'));
+      this.sfx.sparkle();
+    }
+  }
+
   // 스트리머가 짖을 때
   onBark(m) {
     const ahead = 3;
     const pos = [m.pos[0] - Math.sin(m.yaw) * ahead, m.pos[1] + 1.8, m.pos[2] - Math.cos(m.yaw) * ahead];
     this.effects.ring([m.pos[0] - Math.sin(m.yaw) * 5, m.pos[1], m.pos[2] - Math.cos(m.yaw) * 5], m.range * 0.5, 0xff3344);
     this.effects.text(pos, 'WOOF!', { color: '#ff3344', scale: 1.7, life: 0.55 });
-    this.effects.flash(pos, 0xff3344, 36, 14, 0.18);
+    this.effects.flash(pos, 0xff3344, m.final ? 80 : 36, m.final ? 24 : 14, m.final ? 0.35 : 0.18);
+    if (m.final) {
+      this.effects.ring(m.pos, m.range, 0xff3344);
+      this.effects.text([m.pos[0], m.pos[1] + 3.2, m.pos[2]], 'AAAAAAAA!!', { color: '#ff3344', scale: 2.2, life: 0.9 });
+      this.effects.burst([m.pos[0], m.pos[1] + 1.2, m.pos[2]], { n: 40, speed: 16, color: 0xff3344, size: 0.2, life: 0.6, drag: 1, hdr: 2.6 });
+      this.sfx.airhorn();
+    }
     this.effects.burst(pos, { n: 18, speed: 13, color: 0xff3344, size: 0.2, life: 0.45, drag: 1.2, hdr: 2.6, dir: [-Math.sin(m.yaw), 0.05, -Math.cos(m.yaw)] });
     this.sfx.bark();
     const d = Math.hypot(this.body.x - m.pos[0], this.body.z - m.pos[2]);
@@ -1165,7 +1228,7 @@ export class Game {
         this.ultraKind = m.kind;
         this.emote = 0;
         const ultraName = t(`ultra.${m.kind}`);
-        this.hud.setUltra(true, m.ms, ultraName);
+        this.hud.setUltra(true, m.ms, ultraName, ULTRA_FX[m.kind]?.color);
         this.fovKick = 22;
         if (this.infAmmo()) this.reloadT = 0;
         if (m.kind === 'cat' || m.kind === 'hero') {
@@ -1298,9 +1361,11 @@ export class Game {
       const col = { fart: 0x9be02a, six7: 0xffe600, boom: 0xff3d81, laser: 0xff1133 }[w.id];
       if (w.id === 'laser') {
         // 눈 두 개에서 나간다
-        this.effects.tracer(this.muzzlePos(0.2), end, col, 0.07, 0.11);
-        this.effects.tracer(this.muzzlePos(-0.2), end, col, 0.07, 0.11);
-        if (t < w.range - 0.1) this.effects.text(end, '👁️', { scale: 0.5, life: 0.25, stroke: null, rise: 0 });
+        const far = [o[0] + d[0] * w.range, o[1] + d[1] * w.range, o[2] + d[2] * w.range];
+        this.effects.tracer(this.muzzlePos(0.2), far, col, 0.07, 0.11);
+        this.effects.tracer(this.muzzlePos(-0.2), far, col, 0.07, 0.11);
+        const wall = rayWorld(this.map, o, d, w.range);
+        if (wall < w.range - 0.1) this.effects.impact([o[0] + d[0] * wall, o[1] + d[1] * wall, o[2] + d[2] * wall], col, 4);
         continue;
       }
       this.effects.tracer(muzzle, end, col, w.id === 'six7' ? 0.06 : 0.025, 0.08);
@@ -1357,6 +1422,8 @@ export class Game {
   // ---------- 프레임 ----------
   frame() {
     const now = performance.now();
+    // 대기실은 30프레임이면 충분하다
+    if (this.mode !== 'match' && now - this.lastFrame < 30) return;
     const realDt = (now - this.lastFrame) / 1000;
     const dt = Math.min(0.05, realDt);
     this.lastFrame = now;
@@ -1380,6 +1447,7 @@ export class Game {
     this.worldTick?.(t, dt);
     this.effects.update(dt);
 
+    if (this.sunLight.castShadow && ++this.shadowN % (this.mode === 'match' ? 2 : 4) === 0) this.sunLight.shadow.needsUpdate = true;
     this.pipeline.render(dt, this.mode === 'match' && this.alive && !this.emote && !this.forced && now >= this.cineUntil && this.vmRoot.visible);
   }
 
@@ -1391,6 +1459,7 @@ export class Game {
     const fx = this.effects;
     let lit = null;
     for (const [id, c] of this.chars) {
+      c.xray = this.ultraKind === 'minsu' && id !== this.myId && c.deadT < 0;
       if (c.deadT >= 0 || !c.visual.visible) continue;
       const p = c.root.position;
       const kind = c.ultra ? c.ultraKind : null;
@@ -1521,10 +1590,11 @@ export class Game {
       }
     }
     if (charmed) { this.jumpQueued = false; this.dashQueued = false; this.shotQueued = false; }
+    if (this.grabbedBy !== null) { fwd = -fwd; right = -right; }
     const opts = {
       map: this.map,
       gravityMul: this.eventKind === 'moon' ? 0.35 : 1,
-      speedMul: this.ultraKind === 'sigma' ? MOVE.ultraSpeedMul : performance.now() < this.slowUntil ? CHILL.slowMul : this.grabbedBy !== null ? 0.55 : 1,
+      speedMul: this.ultraKind === 'sigma' || this.ultraKind === 'streamer' ? MOVE.ultraSpeedMul : performance.now() < this.slowUntil ? CHILL.slowMul : this.grabbedBy !== null ? 0.55 : 1,
     };
     const events = stepBodyFixed(this.body, {
       fwd, right, yaw: this.yaw, jump: this.jumpQueued && !this.frozen, dash: this.dashQueued && !this.frozen,

@@ -39,6 +39,7 @@ const PUPIL_GEO = new THREE.SphereGeometry(0.08, 8, 6);
 const WHITE = new THREE.MeshBasicMaterial({ color: 0xffffff });
 const IRIS = new THREE.MeshBasicMaterial({ color: 0x2b6cff });
 const BLACK = new THREE.MeshBasicMaterial({ color: 0x000000 });
+const TRACER_GEO = new THREE.CylinderGeometry(0.4, 1, 1, 6, 1).rotateX(-Math.PI / 2);
 const easeOutBack = (k) => 1 + 2.7 * (k - 1) ** 3 + 1.7 * (k - 1) ** 2;
 
 // 수천 개를 한 번에 그리는 입자 묶음
@@ -108,11 +109,15 @@ class Particles {
       list[w++] = p;
     }
     list.length = w;
+    if (w === 0 && this.lastW === 0) return;
+    this.lastW = w;
     const g = this.points.geometry;
     g.setDrawRange(0, w);
-    g.attributes.position.needsUpdate = true;
-    g.attributes.pColor.needsUpdate = true;
-    g.attributes.pSize.needsUpdate = true;
+    for (const [attr, n] of [[g.attributes.position, 3], [g.attributes.pColor, 4], [g.attributes.pSize, 1]]) {
+      attr.clearUpdateRanges();
+      attr.addUpdateRange(0, w * n);
+      attr.needsUpdate = true;
+    }
   }
 }
 
@@ -253,16 +258,16 @@ export class Effects {
     const dir = new THREE.Vector3(to[0] - from[0], to[1] - from[1], to[2] - from[2]);
     const len = dir.length();
     if (len < 0.1) return;
-    const geo = new THREE.CylinderGeometry(width * 0.4, width, len, 6, 1).rotateX(-Math.PI / 2);
     const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(3.2), transparent: true, depthWrite: false, fog: false });
-    const m = new THREE.Mesh(geo, mat);
+    const m = new THREE.Mesh(TRACER_GEO, mat);
+    m.scale.set(width, width, len);
     m.position.set((from[0] + to[0]) / 2, (from[1] + to[1]) / 2, (from[2] + to[2]) / 2);
     m.lookAt(to[0], to[1], to[2]);
     this.add(m, life, (it) => {
       const k = it.life / it.max;
       mat.opacity = k;
-      m.scale.x = m.scale.y = k;
-    }).userData.dispose = () => { geo.dispose(); mat.dispose(); };
+      m.scale.x = m.scale.y = width * k;
+    }).userData.dispose = () => { mat.dispose(); };
   }
 
   // 벽이나 몸에 맞은 자리
@@ -418,6 +423,60 @@ export class Effects {
       m.scale.set(0.5 + e * radius, 1 + k * 2, 0.5 + e * radius);
       mat.opacity = (1 - k) ** 1.4;
     }).userData.dispose = () => { geo.dispose(); mat.dispose(); };
+  }
+
+  // 방사능 지대: 바닥 초록 빛과 올라오는 입자
+  fallout(pos, radius, ms) {
+    const geo = new THREE.CircleGeometry(radius, 40).rotateX(-Math.PI / 2);
+    const mat = new THREE.MeshBasicMaterial({ map: softTexture(), color: new THREE.Color(0.5, 2.4, 0.2), transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(pos[0], pos[1] + 0.05, pos[2]);
+    let acc = 0;
+    this.add(m, ms / 1000, (it, dt) => {
+      mat.opacity = Math.min(0.6, it.life * 0.6) * (0.8 + Math.sin(it.life * 7) * 0.2);
+      acc += dt;
+      if (acc > 0.05) {
+        acc = 0;
+        const a = Math.random() * 6.283, r = Math.sqrt(Math.random()) * radius;
+        this.burst([pos[0] + Math.cos(a) * r, pos[1] + 0.2, pos[2] + Math.sin(a) * r], { n: 1, speed: 0.3, up: 2.6, color: 0x7fff50, size: 0.26, life: 1.3, hdr: 2.2, drag: 0.5, spread: 0 });
+      }
+    }).userData.dispose = () => { geo.dispose(); mat.dispose(); };
+  }
+
+  // 변기맨 물기둥
+  geyser(pos, radius) {
+    this.pillar(pos, 0x41b6ff, 22, 0.9);
+    this.ring(pos, radius, 0x8fdcff);
+    this.flash([pos[0], pos[1] + 3, pos[2]], 0x41b6ff, 60, 24, 0.5);
+    this.burst([pos[0], pos[1] + 0.5, pos[2]], { n: 70, speed: 5, up: 17, color: 0x8fdcff, color2: 0x2a8cff, size: 0.3, size2: 0.12, life: 1.5, g: 21, drag: 0.2, hdr: 2, spread: 1.6 });
+    this.burst([pos[0], pos[1] + 0.3, pos[2]], { n: 20, speed: 12, up: 2, color: 0xffffff, color2: 0x8fdcff, size: 0.8, size2: 1.8, life: 0.8, drag: 3, additive: false, spread: 1, alpha: 0.5 });
+  }
+
+  // 히어로 펀치 충격
+  punch(pos, n = 1) {
+    const at = [pos[0], pos[1] + 1.1, pos[2]];
+    this.flash(at, 0xffd21f, 50 + n * 20, 16, 0.2);
+    this.ring(pos, 5 + n * 2.5, n >= 3 ? 0xff4040 : 0xffd21f);
+    this.burst(at, { n: 18 + n * 8, speed: 10 + n * 2, color: 0xffd21f, color2: 0x2a60ff, size: 0.24, life: 0.5, g: 8, drag: 1.3, hdr: 2.5 });
+  }
+
+  // 빠따 탁탁: 대기실
+  tap(pos) {
+    this.burst(pos, { n: 5, speed: 2.5, up: 0.8, color: 0xffd9a0, size: 0.08, life: 0.3, g: 7, hdr: 1.6, spread: 0.05 });
+  }
+
+  // 셰이더를 미리 만들어 첫 폭발에서 끊기지 않게 한다
+  prewarm(renderer, camera) {
+    const g = new THREE.Group();
+    const add = (m) => { const x = new THREE.Mesh(TRACER_GEO, m); g.add(x); return m; };
+    const mats = [add(fireMaterial()), add(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, fog: false })), add(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }))];
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
+    g.add(s);
+    this.scene.add(g);
+    renderer.compile(this.scene, camera);
+    this.scene.remove(g);
+    for (const m of mats) m.dispose();
+    s.material.dispose();
   }
 
   // 고양이 할퀴기 자국

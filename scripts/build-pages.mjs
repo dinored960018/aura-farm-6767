@@ -3,39 +3,38 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dist = path.join(root, 'dist');
 fs.rmSync(dist, { recursive: true, force: true });
 fs.cpSync(path.join(root, 'public'), dist, { recursive: true });
-fs.cpSync(path.join(root, 'shared'), path.join(dist, 'shared'), { recursive: true });
-fs.mkdirSync(path.join(dist, 'server'));
-for (const f of ['hub.js', 'room.js', 'player.js', 'bot.js', 'nav.js']) {
-  fs.copyFileSync(path.join(root, 'server', f), path.join(dist, 'server', f));
-}
-fs.mkdirSync(path.join(dist, 'vendor/three'), { recursive: true });
-for (const f of ['three.module.js', 'three.core.js']) {
-  fs.copyFileSync(path.join(root, 'node_modules/three/build', f), path.join(dist, 'vendor/three', f));
-}
-for (const f of ['postprocessing/EffectComposer.js', 'postprocessing/RenderPass.js', 'postprocessing/ShaderPass.js', 'postprocessing/UnrealBloomPass.js', 'postprocessing/MaskPass.js', 'postprocessing/Pass.js', 'shaders/CopyShader.js', 'shaders/LuminosityHighPassShader.js']) {
-  const to = path.join(dist, 'vendor/three-addons', f);
-  fs.mkdirSync(path.dirname(to), { recursive: true });
-  fs.copyFileSync(path.join(root, 'node_modules/three/examples/jsm', f), to);
-}
-fs.mkdirSync(path.join(dist, 'vendor/peerjs'));
+// 게임 코드와 three.js를 파일 하나로 묶고 압축한다. 동적 import까지 한 파일에 들어간다.
+fs.rmSync(path.join(dist, 'js'), { recursive: true, force: true });
+await build({
+  entryPoints: [path.join(root, 'public/js/main.js')],
+  outfile: path.join(dist, 'js/main.js'),
+  bundle: true,
+  minify: true,
+  format: 'esm',
+  target: 'es2021',
+  alias: { 'three/addons': path.join(root, 'node_modules/three/examples/jsm') },
+  legalComments: 'none',
+  // 브라우저 주소 기준 경로(public/js → /shared)를 실제 폴더로 잇는다
+  plugins: [{
+    name: 'site-paths',
+    setup(b) {
+      b.onResolve({ filter: /^\.\.\/(shared|server)\// }, (a) => (a.resolveDir.split(path.sep).join('/').endsWith('public/js') ? { path: path.join(root, a.path.slice(3)) } : null));
+    },
+  }],
+  logLevel: 'warning',
+});
+fs.mkdirSync(path.join(dist, 'vendor/peerjs'), { recursive: true });
 fs.copyFileSync(path.join(root, 'node_modules/peerjs/dist/peerjs.min.js'), path.join(dist, 'vendor/peerjs/peerjs.min.js'));
-// 모든 상대 경로 import에 배포 버전을 붙인다
 const ver = Date.now().toString(36);
-const stamp = (dir) => {
-  for (const f of fs.readdirSync(dir)) {
-    if (!f.endsWith('.js')) continue;
-    const p = path.join(dir, f);
-    fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace(/(['"])(\.{1,2}\/[^'"\n]+?\.js)\1/g, `$1$2?v=${ver}$1`));
-  }
-};
-for (const d of ['js', 'shared', 'server']) stamp(path.join(dist, d));
 const indexPath = path.join(dist, 'index.html');
 fs.writeFileSync(indexPath, fs.readFileSync(indexPath, 'utf8')
+  .replace(/<script type="importmap">.*?<\/script>\n/, '')
   .replace('href="style.css"', `href="style.css?v=${ver}"`)
   .replace('src="js/main.js"', `src="js/main.js?v=${ver}"`));
 fs.writeFileSync(path.join(dist, '.nojekyll'), '');

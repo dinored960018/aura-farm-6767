@@ -33,7 +33,7 @@ export const WEAPONS = {
 };
 export const WEAPON_IDS = Object.keys(WEAPONS);
 // 민수 각성 전용 무기
-export const LASER = { id: 'laser', slot: 0, name: '눈깔 레이저', emoji: '👁️', body: 8, head: 16, interval: 0.1, mag: 1, reload: 0, spread: 0, pellets: 1, range: 120, auto: true };
+export const LASER = { id: 'laser', slot: 0, name: '눈깔 레이저', emoji: '👁️', body: 6.7, head: 13.4, interval: 0.1, mag: 1, reload: 0, spread: 0, pellets: 1, range: 120, auto: true, pierce: true };
 export const SLAP = { damage: 67, range: 3.4, cooldown: 0.8, knock: 19 };
 
 export const AURA = {
@@ -45,26 +45,28 @@ export const CHICKEN_HEAL = 34;
 export const BOMB = { radius: 5, damage: 45, knock: 16, fuseMs: 2000 };
 
 export const NUKE = { radius: 20, damage: 220, knock: 30, fuseMs: 2600, aimRange: 70 };
-export const CAT = { flySpeed: 38, latchRange: 1.3, tickMs: 150, damage: 6.7 };
-export const BARK = { range: 16, cone: 0.6, tickMs: 800, damage: 24, knock: 22 };
-export const HERO = { flySpeed: 60, hits: 3, range: 1.5, damage: 45, knock: 28 };
-export const CHILL = { radius: 18, slowMul: 0.4 };
-export const TUNG = { radius: 11, tickMs: 670, damage: 17, knock: 12 };
-export const RIZZ = { radius: 26 };
-export const FLUSH = { radius: 17, coreRadius: 3.5, pull: 9, tickMs: 200, damage: 10 };
+export const FALLOUT = { radius: 13, ms: 6700, tickMs: 670, damage: 6.7 };
+export const SIGMA = { killExtendMs: 2000, killHeal: 34 };
+export const CAT = { flySpeed: 38, latchRange: 1.3, tickMs: 150, damage: 6.7, auraSteal: 67 };
+export const BARK = { range: 16, cone: 0.6, tickMs: 800, damage: 24, knock: 22, finalKnock: 44, finalDamage: 40, count: 6 };
+export const HERO = { flySpeed: 60, hits: 3, range: 1.5, damage: [45, 60, 90], knock: 28, splashRadius: 6, splashDamage: 18 };
+export const CHILL = { radius: 18, slowMul: 0.4, regenPerSec: 13, reflect: 0.5 };
+export const TUNG = { radius: 8, radiusStep: 1, finalRadius: 17, tickMs: 670, damage: 17, finalDamage: 40, knock: 12, finalKnock: 26, count: 7 };
+export const RIZZ = { radius: 26, kissRange: 2.6, tickMs: 250, damage: 6.7, auraDrain: 100, heal: 3 };
+export const FLUSH = { radius: 17, coreRadius: 3.5, pull: 9, tickMs: 200, damage: 10, geyserRadius: 14, geyserDamage: 30, geyserUp: 24 };
 
 // 스킨마다 다른 각성
 export const ULTRAS = {
-  minsu: { name: '눈깔 레이저', ms: 6700, desc: '6.7초간 눈에서 레이저. 탄창 무한' },
-  sigma: { name: '시그마 각성', ms: 6700, desc: '이동 1.4배, 데미지 1.67배, 탄창 무한' },
-  cat: { name: '냥냥 급습', ms: 6700, desc: '벽 뚫고 날아가 얼굴에 붙어 할큄. 맞는 쪽은 F로 떼어냄' },
-  cone: { name: '오펜하이머', ms: 2600, desc: '조준한 곳에 핵. 2.6초 뒤 터짐. 벽 뒤면 절반' },
-  toilet: { name: '대물내림', ms: 5000, desc: '5초간 주변을 빨아들이고 코앞이면 갈아버림' },
-  streamer: { name: '짖기 방송', ms: 4800, desc: '6번 짖어서 앞쪽 상대를 날려버림' },
-  tung: { name: '사후르 타임', ms: 4700, desc: '퉁! 퉁! 퉁! 7번의 충격파. 주변을 띄우고 데미지' },
-  hero: { name: '무적 펀치', ms: 5000, desc: '벽 뚫고 날아가 상대 셋을 차례로 관통' },
-  rizz: { name: '리즈 매혹', ms: 3500, desc: '주변 상대가 3.5초간 나한테 걸어오고 공격 못 함' },
-  chill: { name: '완전 칠함', ms: 5000, desc: '5초간 무적. 주변 상대는 느려짐' },
+  minsu: { name: '눈깔 레이저', ms: 6700, desc: '6.7초간 벽까지 뚫는 레이저. 벽 뒤 상대도 보임' },
+  sigma: { name: '시그마 각성', ms: 6700, desc: '이동 1.4배, 데미지 1.67배, 안 밀림. 킬마다 시간 연장과 회복' },
+  cat: { name: '냥냥 급습', ms: 6700, desc: '얼굴에 붙어 아우라를 훔치고 조작을 뒤집음. F로 떼어냄' },
+  cone: { name: '오펜하이머', ms: 2600, desc: '조준한 곳에 핵. 터진 뒤 방사능 지대가 남음' },
+  toilet: { name: '대물내림', ms: 5000, desc: '5초간 빨아들이고, 끝날 때 물기둥으로 다 띄움' },
+  streamer: { name: '짖기 방송', ms: 4800, desc: '빨리 달리며 6번 짖기. 마지막은 사방으로 터지는 샤우팅' },
+  tung: { name: '사후르 타임', ms: 4700, desc: '점점 커지는 충격파 7번. 7번째 사후르가 제일 큼' },
+  hero: { name: '무적 펀치', ms: 5000, desc: '무적 상태로 셋을 관통. 때릴수록 세지고 주변까지 터짐' },
+  rizz: { name: '리즈 매혹', ms: 3500, desc: '상대가 걸어오고 공격 못 함. 가까이 오면 아우라와 체력을 뺏음' },
+  chill: { name: '완전 칠함', ms: 5000, desc: '5초간 무적에 체력 회복. 쏜 총알은 되돌아감. 주변은 느려짐' },
 };
 
 export const EVENTS = {

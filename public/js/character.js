@@ -201,6 +201,7 @@ const OUTFIT = {
 export class Character {
   static map = null;
   static fx = null;
+  static cam = null;
 
   constructor(skinId, name) {
     this.skinId = skinId;
@@ -246,6 +247,12 @@ export class Character {
     this.blink = 0;
     this.mouthOpen = 0;
     this.deadSpin = 1;
+    this.lobby = false;
+    this.foreZ = [0, 0];
+    this.tapPrev = 0;
+    this.poseIdx = 0;
+    this.xray = false;
+    this.outlineFar = false;
     this.setWeapon('fart');
   }
 
@@ -391,17 +398,20 @@ export class Character {
     // 왕관 (울트라)
     this.crown = new THREE.Group();
     const gold = hdr(0xffc800, 1.25);
+    if (skinId === 'sigma') {
     for (let i = 0; i < 5; i++) {
       const a = (i / 5) * Math.PI * 2;
       this.crown.add(mesh(new THREE.ConeGeometry(0.1, 0.32, 5), gold, Math.cos(a) * 0.3, 0.14, Math.sin(a) * 0.3));
       this.crown.add(skipOutline(mesh(new THREE.SphereGeometry(0.035, 6, 5), hdr(i % 2 ? 0xff2060 : 0x30a0ff, 2), Math.cos(a) * 0.3, 0.32, Math.sin(a) * 0.3)));
     }
     this.crown.add(mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.1, 18), gold));
+    }
     this.crown.position.y = 0.62;
     this.crown.visible = false;
     this.head.add(this.crown);
 
     // 변기 소용돌이
+    if (skinId === 'toilet') {
     const spiral = document.createElement('canvas');
     spiral.width = spiral.height = 256;
     const sx = spiral.getContext('2d');
@@ -420,10 +430,11 @@ export class Character {
       sx.stroke();
     }
     const spiralTex = new THREE.CanvasTexture(spiral);
-    this.whirl = skipOutline(mesh(new THREE.CircleGeometry(4.2, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: spiralTex, color: new THREE.Color(1.1, 1.6, 2.2), transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }), 0, 0.14, 0));
+    this.whirl = skipOutline(mesh(new THREE.CircleGeometry(4.2, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: spiralTex, color: new THREE.Color(0.7, 1.05, 1.5), transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }), 0, 0.14, 0));
     this.whirl2 = skipOutline(mesh(new THREE.TorusGeometry(4.4, 0.08, 6, 44).rotateX(Math.PI / 2), hdr(0x8fdcff, 2, { transparent: true, opacity: 0.6, depthWrite: false }), 0, 0.2, 0));
     this.whirl.visible = this.whirl2.visible = false;
     this.root.add(this.whirl, this.whirl2);
+    }
 
     // 칠가이 방어막
     if (skinId === 'chill') {
@@ -445,14 +456,23 @@ export class Character {
     this.blob = skipOutline(mesh(new THREE.CircleGeometry(0.72, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: softTexture(), color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false }), 0, 0.03, 0));
     this.root.add(this.blob);
 
-    // 그림자 + 외곽선
+    // 그림자 + 외곽선. 멀면 외곽선은 그리지 않는다.
+    this.outlines = [];
     this.root.traverse((m) => {
       if (!m.isMesh || m.userData.noOutline || !m.geometry || m === this.blob) return;
       m.castShadow = true;
       const o = new THREE.Mesh(m.geometry, OUTLINE);
       o.userData.noOutline = true;
       m.add(o);
+      this.outlines.push(o);
     });
+    // 민수 각성 때 벽 너머로 보이는 표시
+    this.mark = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTexture(), color: new THREE.Color(3, 0.25, 0.25), transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    this.mark.scale.set(2.2, 3.2, 1);
+    this.mark.position.y = 1.2;
+    this.mark.renderOrder = 20;
+    this.mark.visible = false;
+    this.root.add(this.mark);
   }
 
   buildSkin(skinId, def, skin, shirt, pants, shoe) {
@@ -705,7 +725,8 @@ export class Character {
     this.eyes.forEach((e) => { e.group.visible = false; e.stalk.visible = false; });
     this.tag && (this.tag.visible = false);
     this.muzzle.material.opacity = 0;
-    this.whirl.visible = this.whirl2.visible = false;
+    if (this.whirl) this.whirl.visible = this.whirl2.visible = false;
+    this.mark.visible = false;
     if (this.bubble) this.bubble.visible = false;
     this.poofed = false;
   }
@@ -732,6 +753,141 @@ export class Character {
   setFore(bendL, bendR) {
     this.armL.userData.fore.rotation.x = bendL;
     this.armR.userData.fore.rotation.x = bendR;
+    this.armL.userData.fore.rotation.z = this.foreZ[0];
+    this.armR.userData.fore.rotation.z = this.foreZ[1];
+  }
+
+  // 대기실에서 캐릭터마다 다른 짓을 한다. 돌려주는 값은 팔꿈치 굽힘.
+  lobbyPose(t) {
+    const A = this.armL, B = this.armR, V = this.visual, H = this.head;
+    V.rotation.x = 0;
+    V.rotation.z = 0;
+    H.rotation.y = 0;
+    H.rotation.x = 0;
+    switch (this.skinId) {
+      case 'sigma': {
+        // 근육, 팔짱, 허리 손을 번갈아 찍는다
+        const idx = Math.floor(t / 2.3) % 3;
+        if (idx !== this.poseIdx) { this.poseIdx = idx; this.squashV -= 2.2; }
+        H.rotation.x = 0.16;
+        H.rotation.y = Math.sin(t * 0.8) * 0.12;
+        if (idx === 0) {
+          A.rotation.set(0, 0, -1.5);
+          B.rotation.set(0, 0, 1.5);
+          const flex = Math.sin(t * 7) * 0.12;
+          this.foreZ = [-2.05 + flex, 2.05 - flex];
+        } else if (idx === 1) {
+          A.rotation.set(-0.95, 0, 0.1);
+          B.rotation.set(-1.15, 0, -0.1);
+          this.foreZ = [1.7, -1.7];
+        } else {
+          A.rotation.set(0, 0, -0.72);
+          B.rotation.set(0, 0, 0.72);
+          this.foreZ = [1.65, -1.65];
+          H.rotation.y = 0.5;
+        }
+        return [0, 0];
+      }
+      case 'tung': {
+        // 빠따로 손바닥을 탁탁
+        const s = Math.abs(Math.sin(t * 5.2));
+        A.rotation.set(-1.05 - s * 0.75, 0, 0.42);
+        B.rotation.set(-0.85, 0, -0.32);
+        this.foreZ = [0, -0.85];
+        H.rotation.x = 0.12 - s * 0.14;
+        V.position.y = (1 - s) * 0.02;
+        V.rotation.z = Math.sin(t * 2.6) * 0.035;
+        if (this.tapPrev > 0.1 && s <= 0.1) {
+          this.squashV -= 0.9;
+          const p = this.root.position;
+          const fwd = this.root.rotation.y;
+          Character.fx?.tap?.([p.x - Math.sin(fwd) * 0.55, p.y + 0.98, p.z - Math.cos(fwd) * 0.55]);
+        }
+        this.tapPrev = s;
+        return [-0.25, -0.1];
+      }
+      case 'cat': {
+        // 앞발 핥으면서 킹받게 쳐다보기
+        const lick = Math.sin(t * 9) * 0.14;
+        A.rotation.set(0.1, 0, -0.12);
+        B.rotation.set(-2.05, 0, -0.42);
+        H.rotation.z = 0.16;
+        H.rotation.y = Math.sin(t * 0.7) * 0.2;
+        V.rotation.z = Math.sin(t * 1.5) * 0.05;
+        return [-0.3, -1.05 + lick];
+      }
+      case 'cone': {
+        // 오하이오 주민: 어딘가 고장 났다
+        const glitch = Math.sin(t * 1.3) > 0.82;
+        H.rotation.y = glitch ? Math.PI * (Math.floor(t * 11) % 2) * 0.5 : Math.sin(t * 0.9) * 0.2;
+        H.rotation.z = glitch ? 0.3 : Math.sin(t * 2.2) * 0.1;
+        V.position.y = glitch ? Math.random() * 0.07 : 0;
+        A.rotation.set(Math.sin(t * 2.1) * 0.5, 0, -0.14);
+        B.rotation.set(Math.sin(t * 2.1 + 3) * 0.5, 0, 0.14);
+        return [-0.1, -0.1];
+      }
+      case 'toilet': {
+        // 변기에서 머리가 들락날락, 양손 휘적
+        H.position.y = 1.3 + Math.max(0, Math.sin(t * 2.4)) * 0.3;
+        H.rotation.y = Math.sin(t * 1.2) * 0.35;
+        V.position.y = Math.abs(Math.sin(t * 2.4)) * 0.05;
+        A.rotation.set(0, 0, -1.2 + Math.sin(t * 4.8) * 0.4);
+        B.rotation.set(0, 0, 1.2 - Math.sin(t * 4.8) * 0.4);
+        return [0, 0];
+      }
+      case 'streamer': {
+        // 펄쩍펄쩍 뛰면서 소리 지르기
+        const j = Math.abs(Math.sin(t * 5.4));
+        V.position.y = j * 0.3;
+        H.rotation.x = -0.28 + Math.sin(t * 10.8) * 0.16;
+        H.rotation.y = Math.sin(t * 2.7) * 0.25;
+        A.rotation.set(-2.8 + Math.sin(t * 10.8) * 0.25, 0, -0.35);
+        B.rotation.set(-2.8 - Math.sin(t * 10.8) * 0.25, 0, 0.35);
+        this.mouthOpen = Math.max(this.mouthOpen, 0.8);
+        return [-0.4, -0.4];
+      }
+      case 'hero': {
+        // 허리에 손, 살짝 떠서 내려다보기
+        V.position.y = 0.3 + Math.sin(t * 1.8) * 0.07;
+        H.rotation.x = 0.14;
+        A.rotation.set(0, 0, -0.72);
+        B.rotation.set(0, 0, 0.72);
+        this.foreZ = [1.65, -1.65];
+        this.legL.rotation.x = 0.04;
+        this.legR.rotation.x = -0.22;
+        this.legR.userData.shin.rotation.x = 0.38;
+        return [0, 0];
+      }
+      case 'rizz': {
+        // 앞머리 쓸어 넘기고 손가락 총
+        const flick = Math.sin(t * 1.7);
+        A.rotation.set(-2.75, 0, -0.4 - flick * 0.15);
+        B.rotation.set(-1.45 + Math.max(0, Math.sin(t * 3.4)) * -0.18, 0.25, 0);
+        H.rotation.z = -0.13;
+        H.rotation.y = 0.25 + flick * 0.1;
+        V.rotation.z = Math.sin(t * 1.7) * 0.055;
+        if (Math.sin(t * 0.9) > 0.97) this.eyes[1].lid.rotation.x = -1.2;
+        return [-1.7, -0.02];
+      }
+      case 'chill': {
+        // 주머니에 손 넣고 끄덕
+        A.rotation.set(0.42, 0, 0.16);
+        B.rotation.set(0.42, 0, -0.16);
+        H.rotation.x = Math.sin(t * 1.5) * 0.09;
+        H.rotation.y = Math.sin(t * 0.55) * 0.2;
+        V.rotation.z = Math.sin(t * 1.1) * 0.03;
+        return [-1, -1];
+      }
+      default: {
+        // 민수: 멍하니 머리 긁기
+        const sc = Math.sin(t * 13) * 0.14;
+        A.rotation.set(0.05, 0, -0.1);
+        B.rotation.set(-2.5, 0, 0.34);
+        H.rotation.z = -0.1 + Math.sin(t * 0.8) * 0.05;
+        H.rotation.y = Math.sin(t * 0.5) * 0.15;
+        return [-0.1, -1.55 + sc];
+      }
+    }
   }
 
   updateBlob() {
@@ -892,7 +1048,10 @@ export class Character {
     this.visual.position.y = moving ? Math.abs(Math.sin(ph)) * (0.05 + runAmt * 0.05) : 0;
     const farming = this.emote === 1;
     let bendL = -0.25, bendR = -0.12;
-    if (kind === 'hero') {
+    this.foreZ[0] = this.foreZ[1] = 0;
+    if (this.lobby) {
+      [bendL, bendR] = this.lobbyPose(t);
+    } else if (kind === 'hero') {
       this.armR.rotation.set(-3.1, 0, 0);
       this.armL.rotation.set(0.1, 0, 0.1);
       bendL = -0.5; bendR = 0;
@@ -937,8 +1096,8 @@ export class Character {
       this.head.rotation.y = 0;
       this.head.rotation.x = 0.7;
     } else if (kind === 'toilet') {
-      this.armL.rotation.set(0, 0, 1.45);
-      this.armR.rotation.set(0, 0, -1.45);
+      this.armL.rotation.set(0, 0, -1.45);
+      this.armR.rotation.set(0, 0, 1.45);
       bendL = bendR = 0;
       this.visual.rotation.x = 0;
       this.visual.rotation.z = 0;
@@ -986,7 +1145,7 @@ export class Character {
       this.visual.rotation.y += -0.5 + k * 0.9;
     }
 
-    this.gun.visible = this.emote === 0 && !['cat', 'minsu', 'hero', 'chill', 'streamer', 'toilet'].includes(kind);
+    this.gun.visible = !this.lobby && this.emote === 0 && !['cat', 'minsu', 'hero', 'chill', 'streamer', 'toilet'].includes(kind);
 
     // 숙임과 꼬임
     if (!['hero', 'cat', 'toilet'].includes(kind)) {
@@ -994,7 +1153,7 @@ export class Character {
       this.visual.rotation.z += this.leanS;
       this.visual.rotation.y += this.twist;
     }
-    if (this.skinId === 'toilet' && kind !== 'toilet') {
+    if (this.skinId === 'toilet' && kind !== 'toilet' && !this.lobby) {
       // 변기는 다리 없이 통통 뛰어 다닌다
       const hop = moving ? Math.abs(Math.sin(ph * 0.75)) * 0.24 : 0;
       this.visual.position.y = hop;
@@ -1008,7 +1167,7 @@ export class Character {
       });
     }
     if (kind === 'toilet') this.visual.rotation.y = t * 11;
-    this.whirl.visible = this.whirl2.visible = kind === 'toilet';
+    if (this.whirl) this.whirl.visible = this.whirl2.visible = kind === 'toilet';
     if (kind === 'toilet') {
       this.whirl.rotation.y = -t * 7;
       this.whirl.scale.setScalar(0.92 + Math.sin(t * 3) * 0.08);
@@ -1036,6 +1195,15 @@ export class Character {
     const sq = Math.max(-0.35, Math.min(0.35, this.squash));
     this.visual.scale.set(scale * (1 - sq * 0.6), scale * (1 + sq), scale * (1 - sq * 0.6));
 
+    this.mark.visible = this.xray;
+    if (Character.cam) {
+      const c = Character.cam.position;
+      const far = (c.x - pos.x) ** 2 + (c.z - pos.z) ** 2 > 900;
+      if (far !== this.outlineFar) {
+        this.outlineFar = far;
+        for (const o of this.outlines) o.visible = !far;
+      }
+    }
     this.updateBlob();
   }
 

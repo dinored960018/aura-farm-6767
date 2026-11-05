@@ -90,6 +90,7 @@ export const TIERS = [
   { pixel: 1.5, bloom: true, shadow: 2048, outline: true },
   { pixel: 1, bloom: true, shadow: 1024, outline: true },
   { pixel: 1, bloom: false, shadow: 0, outline: false },
+  { pixel: 0.75, bloom: false, shadow: 0, outline: false },
 ];
 
 export class Pipeline {
@@ -104,6 +105,8 @@ export class Pipeline {
     this.tint = new THREE.Color(0, 0, 0);
     this.frameMs = 16;
     this.watchT = 0;
+    this.fastT = 0;
+    this.dropped = false;
     const forced = new URLSearchParams(location.search).get('gfx');
     this.locked = forced !== null;
     let saved = 0;
@@ -134,6 +137,11 @@ export class Pipeline {
     if (cfg.bloom) {
       if (!this.composer) this.buildComposer();
       r.toneMapping = THREE.NoToneMapping;
+      // 중간 단계는 안티앨리어싱을 줄인다
+      const samples = n === 0 ? 4 : 2;
+      for (const rt of [this.composer.renderTarget1, this.composer.renderTarget2, this.vmPass.rt]) {
+        if (rt.samples !== samples) { rt.samples = samples; rt.dispose(); }
+      }
     } else {
       r.toneMapping = THREE.NeutralToneMapping;
     }
@@ -160,9 +168,26 @@ export class Pipeline {
     if (this.watchT > 3 && this.frameMs > 27 && this.tier < TIERS.length - 1) {
       this.watchT = 0;
       this.frameMs = 16;
+      this.fastT = 0;
+      this.dropped = true;
       this.setTier(this.tier + 1);
       try { localStorage.setItem('aura-gfx', String(this.tier)); } catch { /* 저장 불가 */ }
+      return;
     }
+    // 지난번에 낮춘 단계가 남아 있어도 여유가 충분하면 한 칸 올려 본다. 이번 실행에서 떨어진 적이 있으면 안 올린다.
+    this.fastT = this.frameMs < 12 ? this.fastT + realDt : 0;
+    if (this.fastT > 20 && !this.dropped && this.tier > 0) {
+      this.fastT = 0;
+      this.setTier(this.tier - 1);
+      try { localStorage.setItem('aura-gfx', String(this.tier)); } catch { /* 저장 불가 */ }
+    }
+  }
+
+  prewarm(effects) {
+    const r = this.renderer;
+    if (TIERS[this.tier].bloom) r.setRenderTarget(this.composer.renderTarget1);
+    effects.prewarm(r, this.camera);
+    r.setRenderTarget(null);
   }
 
   render(dt, showVm) {
