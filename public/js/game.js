@@ -142,9 +142,9 @@ export const ULTRA_FX = {
   } },
   streamer: { color: 0xff3344, emit: (fx, p) => rise(fx, p, 0xff3344, { size: 0.12, up: 2.5 }) },
   tung: { color: 0xffc233, emit: (fx, p) => { if (Math.random() < 0.5) fx.dust([p.x, p.y, p.z], 2, 0xc9975c); } },
-  hero: { color: 0xffd21f, emit: (fx, p) => {
-    fx.burst([p.x, p.y + 1.1, p.z], { n: 3, speed: 0.4, color: 0xffd21f, size: 0.55, size2: 0.06, life: 0.42, hdr: 2.2, spread: 0.6 });
-    fx.burst([p.x, p.y + 1.1, p.z], { n: 2, speed: 0.4, color: 0x2a60ff, size: 0.42, size2: 0.05, life: 0.5, hdr: 2.6, spread: 0.8 });
+  hero: { color: 0xe8342c, emit: (fx, p) => {
+    fx.burst([p.x, p.y + 1.1, p.z], { n: 3, speed: 0.4, color: 0xff5a3a, size: 0.55, size2: 0.06, life: 0.42, hdr: 2.2, spread: 0.6 });
+    fx.burst([p.x, p.y + 1.1, p.z], { n: 2, speed: 0.4, color: 0xffd21f, size: 0.42, size2: 0.05, life: 0.5, hdr: 2.6, spread: 0.8 });
   } },
   rizz: { color: 0xff5fc0, emit: (fx, p) => rise(fx, p, 0xff5fc0, { size: 0.18, up: 2 }) },
   chill: { color: 0x60c8ff, emit: (fx, p) => rise(fx, p, 0x60c8ff, { size: 0.12, up: 0.9, r: 1.7, life: 1.5 }) },
@@ -1151,14 +1151,14 @@ export class Game {
     return performance.now() < this.charmUntil;
   }
 
-  // 오펜하이머: 위로 올라가는 현악기 → 번쩍 → 잠깐 정적 → 쾅
+  // 핵 모드: 위로 올라가는 현악기 → 번쩍 → 잠깐 정적 → 쾅
   onNuke(m) {
     const mine = m.id === this.myId;
     this.effects.warning(m.pos, m.radius, m.in, '☢️', 5);
     this.sfx.stopMusic();
     this.musicHold = performance.now() + m.in + 3500;
     this.sfx.nukeWind(m.in);
-    this.sfx.say('Now I am become death, the destroyer of worlds', { pitch: 0.1, rate: 0.72 });
+    this.sfx.say('Tactical nuke incoming', { pitch: 0.1, rate: 0.72 });
     this.hud.oppenheimer(m.in, mine ? null : this.nameOf(m.id));
   }
 

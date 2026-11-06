@@ -126,9 +126,9 @@
       <button id="botOutBtn" class="ghost">Bot−</button>
       <button id="copyBtn" class="ghost" data-i18n="room.invite" data-i18n-title="room.inviteTitle"></button>
     </div>
-    <h3 data-i18n="room.chat"></h3>
-    <div id="chatLog"></div>
-    <form id="chatForm" class="row"><input id="chatInput" maxlength="120" data-i18n-ph="room.chatPh" autocomplete="off"><button class="ghost" data-i18n="room.send"></button></form>
+    <h3 class="chatBit" data-i18n="room.chat"></h3>
+    <div id="chatLog" class="chatBit"></div>
+    <form id="chatForm" class="row chatBit"><input id="chatInput" maxlength="120" data-i18n-ph="room.chatPh" autocomplete="off"><button class="ghost" data-i18n="room.send"></button></form>
   </div>
   <div class="card side right">
     <h3 data-i18n="room.map"></h3>
@@ -160,6 +160,7 @@
 </section>
 
 <div id="toast" hidden></div>
+<div id="adBlock" hidden></div>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

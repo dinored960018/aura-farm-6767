@@ -6,6 +6,7 @@ export class Sfx {
     this.ctx = null;
     this.volume = 0.8;
     this.muted = false;
+    this.holds = new Set(); // 광고, 포털 음소거처럼 사용자 설정보다 우선하는 무음
     this.music = null;
     this.ttsOn = 'speechSynthesis' in window;
     this.voices = [];
@@ -22,7 +23,7 @@ export class Sfx {
       if (!AC) return;
       this.ctx = new AC();
       this.master = this.ctx.createGain();
-      this.master.gain.value = this.muted ? 0 : this.volume;
+      this.master.gain.value = this.silent ? 0 : this.volume;
       const comp = this.ctx.createDynamicsCompressor();
       comp.threshold.value = -10;
       comp.ratio.value = 6;
@@ -46,14 +47,26 @@ export class Sfx {
 
   setVolume(v) {
     this.volume = v;
-    if (this.master) this.master.gain.value = this.muted ? 0 : v;
+    this.applyGain();
   }
 
   toggleMute() {
     this.muted = !this.muted;
-    if (this.master) this.master.gain.value = this.muted ? 0 : this.volume;
-    if (this.muted && this.ttsOn) speechSynthesis.cancel();
+    this.applyGain();
     return this.muted;
+  }
+
+  setHold(key, on) {
+    if (on) this.holds.add(key);
+    else this.holds.delete(key);
+    this.applyGain();
+  }
+
+  get silent() { return this.muted || this.holds.size > 0; }
+
+  applyGain() {
+    if (this.master) this.master.gain.value = this.silent ? 0 : this.volume;
+    if (this.silent && this.ttsOn) speechSynthesis.cancel();
   }
 
   get ready() { return !!this.ctx && this.ctx.state === 'running'; }
@@ -496,7 +509,7 @@ export class Sfx {
 
   // ---- TTS ----
   say(text, { lang = 'en-US', pitch = 1, rate = 1, volume = 1, interrupt = true } = {}) {
-    if (!this.ttsOn || this.muted) return;
+    if (!this.ttsOn || this.silent) return;
     try {
       if (interrupt) speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);

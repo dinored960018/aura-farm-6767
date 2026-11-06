@@ -1,4 +1,4 @@
-// GitHub Pages용 정적 파일을 dist/ 에 모은다. 인자로 deploy를 주면 gh-pages 브랜치에 올린다.
+// 정적 파일을 모은다. deploy: gh-pages 브랜치에 올림. crazygames: SDK를 넣어 dist-crazygames/ 에 만들고 업로드용 zip을 만든다.
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -6,7 +6,9 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const dist = path.join(root, 'dist');
+const mode = process.argv[2];
+const crazy = mode === 'crazygames';
+const dist = path.join(root, crazy ? 'dist-crazygames' : 'dist');
 fs.rmSync(dist, { recursive: true, force: true });
 fs.cpSync(path.join(root, 'public'), dist, { recursive: true });
 // 게임 코드와 three.js를 파일 하나로 묶고 압축한다. 동적 import까지 한 파일에 들어간다.
@@ -36,11 +38,21 @@ const indexPath = path.join(dist, 'index.html');
 fs.writeFileSync(indexPath, fs.readFileSync(indexPath, 'utf8')
   .replace(/<script type="importmap">.*?<\/script>\n/, '')
   .replace('href="style.css"', `href="style.css?v=${ver}"`)
-  .replace('src="js/main.js"', `src="js/main.js?v=${ver}"`));
+  .replace('src="js/main.js"', `src="js/main.js?v=${ver}"`)
+  .replace('</head>', crazy ? `<script>window.AURA_PORTAL='crazygames'</script>\n<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>\n</head>` : '</head>'));
+if (crazy) {
+  const out = path.join(root, 'aura-farm-6767-crazygames.zip');
+  fs.rmSync(out, { force: true });
+  // 윈도우 내장 tar만 zip을 만든다 (Git Bash의 tar는 못 만듦)
+  const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot, 'System32', 'tar.exe') : 'bsdtar';
+  execFileSync(tar, ['-a', '-cf', out, ...fs.readdirSync(dist)], { cwd: dist, stdio: 'inherit' });
+  console.log('zip 생성', out, fs.statSync(out).size);
+  process.exit(0);
+}
 fs.writeFileSync(path.join(dist, '.nojekyll'), '');
 console.log('dist 생성');
 
-if (process.argv[2] === 'deploy') {
+if (mode === 'deploy') {
   const remote = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: root, encoding: 'utf8' }).trim();
   const git = (...a) => execFileSync('git', a, { cwd: dist, stdio: 'inherit' });
   git('init', '-q', '-b', 'gh-pages');

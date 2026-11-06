@@ -5,6 +5,7 @@ import {
 } from '../shared/constants.js';
 import { MAPS, MAP_IDS, DEFAULT_MAP, pickSpawn, rayWorld, rayPlayer, groundAt } from '../shared/map.js';
 import { Bot } from './bot.js';
+import { cleanText } from '../shared/filter.js';
 
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 const validVec = (v) => Array.isArray(v) && v.length === 3 && v.every(finite);
@@ -35,7 +36,7 @@ export class Room {
 
   // ---------- 대기실 ----------
   summary() {
-    return { id: this.id, name: this.name, state: this.state, count: this.players.length, max: MAX_PLAYERS, map: this.mapChoice };
+    return { id: this.id, name: this.name, state: this.state, count: this.players.length, humans: this.players.filter((p) => !p.isBot).length, max: MAX_PLAYERS, map: this.mapChoice };
   }
 
   roomMessage() {
@@ -61,7 +62,10 @@ export class Room {
   }
 
   add(player) {
-    if (this.players.length >= MAX_PLAYERS || this.state !== 'lobby') return false;
+    if (this.state !== 'lobby') return false;
+    // 사람이 오면 봇이 자리를 내준다
+    if (this.players.length >= MAX_PLAYERS && this.players.some((p) => p.isBot)) this.removeBot();
+    if (this.players.length >= MAX_PLAYERS) return false;
     player.room = this;
     player.ready = false;
     player.wins = 0;
@@ -152,7 +156,7 @@ export class Room {
 
   chat(player, text) {
     const clean = String(text ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 120);
-    if (clean) this.broadcast({ t: 'chat', from: player.name, text: clean });
+    if (clean) this.broadcast({ t: 'chat', from: player.name, text: cleanText(clean) });
   }
 
   maybeStart() {

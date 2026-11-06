@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { createHub } from './hub.js';
+import { addWords } from '../shared/filter.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MOUNTS = [
@@ -41,6 +42,7 @@ function serveStatic(req, res) {
 export function startServer({ port = 6767, host = '0.0.0.0', timings = {} } = {}) {
   const server = http.createServer(serveStatic);
   const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024 });
+  try { addWords(fs.readFileSync(path.join(ROOT, 'public/badwords.txt'), 'utf8').split('\n')); } catch { /* 기본 목록만 쓴다 */ }
   const hub = createHub({ timings });
   const sockets = new Set();
 

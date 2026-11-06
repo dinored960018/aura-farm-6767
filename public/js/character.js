@@ -125,9 +125,12 @@ function nameSprite(text) {
   c.width = 512; c.height = 96;
   const x = c.getContext('2d');
   x.font = '900 56px "Malgun Gothic", sans-serif';
+  // 긴 닉네임(최대 20자)도 잘리지 않게 줄인다
+  const fit = Math.min(1, 480 / x.measureText(text).width);
+  x.font = `900 ${Math.floor(56 * fit)}px "Malgun Gothic", sans-serif`;
   x.textAlign = 'center';
   x.textBaseline = 'middle';
-  x.lineWidth = 12;
+  x.lineWidth = 12 * fit;
   x.strokeStyle = '#000';
   x.strokeText(text, 256, 50);
   x.fillStyle = '#fff';
@@ -193,7 +196,7 @@ const OUTFIT = {
   toilet: { pants: 0xffffff, shoe: 0xffffff, iris: 0x2b9cff, brow: 0x4a2a12 },
   streamer: { pants: 0x18181c, shoe: 0xf4f4f4, iris: 0x2a1a0c, brow: 0x120c08 },
   tung: { pants: 0x8f5f30, shoe: 0x5c3a1c, iris: 0x111111, brow: 0x5c3a1c, browTilt: 0.2 },
-  hero: { pants: 0x2450c8, shoe: 0x2450c8, iris: 0x222222, brow: null },
+  hero: { pants: 0x1c1c22, shoe: 0xe8342c, iris: 0x222222, brow: null },
   rizz: { pants: 0x24182e, shoe: 0xfafafa, iris: 0xd0208a, brow: 0x1a1a24, browTilt: -0.15 },
   chill: { pants: 0x3f6aa8, shoe: 0xd9d4c8, iris: 0x2a1a0c, brow: null, lid: 0.04 },
 };
@@ -586,9 +589,9 @@ export class Character {
       v.add(n2);
       collar(lambert(0xffffff));
     } else if (skinId === 'hero') {
-      const blue = lambert(0x2450c8);
+      const blue = lambert(0x1c1c22);
       this.mats.push(blue);
-      this.head.add(mesh(new THREE.SphereGeometry(0.538, 20, 12, 0, Math.PI * 2, 0, 1.75), lambert(0xffd21f), 0, 0.01, 0));
+      this.head.add(mesh(new THREE.SphereGeometry(0.538, 20, 12, 0, Math.PI * 2, 0, 1.75), lambert(0xe8342c), 0, 0.01, 0));
       const dark = new THREE.MeshBasicMaterial({ color: 0x101014 });
       for (const s of [-1, 1]) {
         const lens = mesh(new THREE.SphereGeometry(0.235, 16, 10), dark, s * 0.21, 0.13, -0.33);
@@ -599,7 +602,7 @@ export class Character {
       this.armL.material = blue;
       this.armR.material = blue;
       for (const a of [this.armL, this.armR]) { a.userData.fore.material = blue; a.userData.hand.material = blue; }
-      const chest = decal('I', 0.44, '#2450c8');
+      const chest = decal('M', 0.44, '#1c1c22');
       chest.position.set(0, 1.08, -0.255);
       chest.rotation.y = Math.PI;
       v.add(chest);

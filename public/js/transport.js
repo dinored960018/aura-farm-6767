@@ -6,13 +6,21 @@ const PREFIX = 'aura6767-';
 const SILENCE_MS = 10000; // 이만큼 아무 신호 없으면 끊긴 걸로 본다 (창을 그냥 닫으면 close가 늦게 온다)
 const params = new URLSearchParams(location.search);
 
-export const P2P = location.hostname.endsWith('github.io') || params.has('p2p');
+export const P2P = location.hostname.endsWith('github.io') || params.has('p2p') || window.AURA_PORTAL === 'crazygames';
 let requested = params.get('room')?.toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
 // 방장이 자기 방 주소에서 새로고침한 경우: 손님이 아니라 다시 방장으로 시작
 try {
   if (P2P && requested && sessionStorage.getItem('aura-host-code') === requested) requested = null;
 } catch { /* 저장 안 되는 브라우저 */ }
-export const inviteCode = requested;
+export let inviteCode = requested;
+
+// 크레이지게임즈 초대는 주소가 아니라 SDK로 코드가 온다. 연결 전에 부른다
+export function setInviteCode(code) {
+  const c = String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
+  let mine = null;
+  try { mine = sessionStorage.getItem('aura-host-code'); } catch { /* 무시 */ }
+  inviteCode = c && c !== mine ? c : null;
+}
 
 let peerLib = null;
 function loadPeer() {
@@ -50,9 +58,14 @@ class Fake {
 
 // 탭이 뒤로 가도 느려지지 않는 타이머 (워커 안에서 돈다)
 function workerTimer(ms, fn) {
-  const src = `setInterval(() => postMessage(0), ${ms});`;
-  const w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
-  w.onmessage = fn;
+  // 포털의 보안 정책이 워커를 막으면 일반 타이머로 돌린다
+  const fallback = () => setInterval(fn, ms);
+  try {
+    const src = `setInterval(() => postMessage(0), ${ms});`;
+    const w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+    w.onmessage = fn;
+    w.onerror = fallback;
+  } catch { fallback(); }
 }
 
 // 방장: 내 브라우저가 서버
@@ -69,6 +82,11 @@ class HostTransport extends Fake {
   async start() {
     const { createHub } = await import('../server/hub.js');
     const { TICK_MS } = await import('../server/room.js');
+    // 내 브라우저가 서버이므로 욕설 목록도 여기서 받는다. 실패하면 기본 목록만 쓴다
+    fetch(new URL('../badwords.txt', import.meta.url))
+      .then((r) => (r.ok ? r.text() : ''))
+      .then(async (txt) => { (await import('../shared/filter.js')).addWords(txt.split('\n')); })
+      .catch(() => {});
     this.hub = createHub({ autoTick: false });
     workerTimer(TICK_MS, () => this.hub.tick());
     this.client = this.hub.connect((raw) => queueMicrotask(() => this.deliver(raw)));
@@ -102,7 +120,7 @@ class HostTransport extends Fake {
   tryRegister(Peer, onError, attempt) {
     const peer = new Peer(PREFIX + this.code);
     this.peer = peer;
-    peer.on('open', () => { this.registered = true; });
+    peer.on('open', () => { this.registered = true; this.onCode?.(); });
     peer.on('connection', (conn) => this.addGuest(conn));
     peer.on('disconnected', () => { if (!peer.destroyed) peer.reconnect(); }); // 새 손님을 받으려면 필요
     peer.on('error', (e) => {

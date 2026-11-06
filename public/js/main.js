@@ -4,10 +4,11 @@ import { MAPS, MAP_IDS } from '../shared/map.js';
 import { Sfx } from './audio.js';
 import { Hud } from './hud.js';
 import { Game } from './game.js';
-import { P2P, inviteCode, inviteUrl, openTransport } from './transport.js';
+import { P2P, inviteCode, inviteUrl, openTransport, setInviteCode } from './transport.js';
 import { lines, pick } from './memes.js';
 import { makePortraits, faceEl } from './portraits.js';
-import { t, getLang, setLang, applyStatic } from './i18n.js';
+import { t, getLang, setLang, suggestLang, applyStatic } from './i18n.js';
+import { portal } from './portal.js';
 
 const $ = (id) => document.getElementById(id);
 const screens = { home: $('home'), room: $('room'), result: $('result') };
@@ -81,6 +82,7 @@ let invitedToast = false;
 // 방에 있는 동안 주소창 링크가 곧 초대 링크다
 function syncAddress() {
   const { ws } = net;
+  if (portal.active) { syncPortalRoom(); return; }
   if (ws?.isGuest) return; // 손님 주소에는 이미 코드가 있다
   const code = !room ? null : P2P ? ws?.code : room.id;
   const u = new URL(location.href);
@@ -94,9 +96,21 @@ function syncAddress() {
   }
 }
 let invitedByLink = false;
+// 크레이지게임즈의 친구 초대 버튼에 방 상태를 알려 준다. 봇 자리는 사람이 오면 비워 주므로 빈자리로 친다
+function syncPortalRoom() {
+  const { ws } = net;
+  if (!room) { portal.leftRoom(); return; }
+  const code = ws?.code;
+  const ok = !!code && (ws.isGuest || ws.registered);
+  const humans = room.players.filter((p) => !p.isBot).length;
+  if (!code) return; // SDK는 첫 호출에 방 ID가 있어야 한다
+  portal.updateRoom({ roomId: code, isJoinable: ok && room.state === 'lobby' && humans < MAX_PLAYERS, inviteParams: { room: code } });
+}
 function leaveToHome(text) {
   toast(text);
   $('connStatus').textContent = text;
+  // 새로고침해도 같은 초대로 다시 들어가지 않게 표시해 둔다
+  try { sessionStorage.setItem('aura-skip-invite', net.ws?.code ?? ''); } catch { /* 무시 */ }
   setTimeout(() => {
     const u = new URL(location.href);
     u.searchParams.delete('room');
@@ -115,9 +129,19 @@ H.welcome = (m) => {
   }
   // 방장이 새로고침한 경우 주소의 옛 코드를 지운다
   if (P2P && net.ws.isHost) syncAddress();
+  // 크레이지게임즈: 첫 화면 없이 바로 내 방에 들어가고, 봇이 채워져 있어 버튼 한 번이면 시작
+  if (portal.active && net.ws.isHost && !joined) {
+    joined = true;
+    openMyRoom();
+    for (let i = 1; i < MAX_PLAYERS; i++) net.send({ t: 'addBot' });
+  }
   // 초대 링크로 왔으면 바로 입장
   if (net.ws.isGuest && !joined) {
-    if (!m.rooms.length) { toast(t('toast.noRoom')); return; }
+    if (!m.rooms.length) {
+      if (portal.active) leaveToHome(t('toast.noRoom'));
+      else toast(t('toast.noRoom'));
+      return;
+    }
     joined = true;
     sendHello();
     net.send({ t: 'join', id: m.rooms[0].id });
@@ -134,6 +158,7 @@ H.sys = (m) => addChat(t('system'), t(m.key, m.mapId
   ? { ...m.vars, map: t(m.mapId === 'random' ? 'room.random' : `map.${m.mapId}`) }
   : m.vars));
 H.error = (m) => {
+  if (portal.active && net.ws?.isGuest) { leaveToHome(t(m.key)); return; }
   toast(t(m.key));
   syncAddress();
 };
@@ -158,12 +183,13 @@ H.room = (m) => {
     if (!wasIn) { sfx.unlock(); sfx.playMusic('lobby'); }
   }
 };
-H.chat = (m) => addChat(m.from, m.text);
+H.chat = (m) => { if (!chatOff()) addChat(m.from, m.text); };
 H.matchStart = (m) => {
   inMatch = true;
   sfx.unlock();
   for (const p of m.players) hud.names.set(p.id, p.name);
   showScreen(null);
+  portal.gameplayStart();
   game.onMatchStart(m, net.id);
   startTicker();
 };
@@ -205,10 +231,13 @@ H.backToLobby = () => {
   game.setAttract(room?.players ?? [], room?.mapId);
   sfx.playMusic('lobby');
   addChat(t('system'), t('sys.again'));
+  // 다음 경기는 내가 시작을 눌러야 열리므로 광고 중에 경기가 시작되지 않는다
+  portal.midgame(sfx);
 };
 
 function leaveMatchView() {
   inMatch = false;
+  portal.gameplayStop();
   game.onMatchEnd();
   hud.show(false);
   stopTicker();
@@ -233,8 +262,7 @@ function firstGesture() { sfx.unlock(); sfx.playMusic('lobby'); }
 window.addEventListener('pointerdown', firstGesture, { once: true });
 window.addEventListener('keydown', firstGesture, { once: true });
 
-$('createBtn').onclick = () => {
-  sfx.unlock();
+function openMyRoom() {
   sendHello();
   if (net.ws.isHost) net.ws.onCode = syncAddress;
   net.ws.openInvites?.(() => toast(t('toast.inviteFail')));
@@ -242,6 +270,11 @@ $('createBtn').onclick = () => {
     t: 'create',
     name: $('roomNameInput').value.trim() || t('roomDefault', { name: $('nameInput').value.trim() || t('home.nickPh') }),
   });
+}
+
+$('createBtn').onclick = () => {
+  sfx.unlock();
+  openMyRoom();
   sfx.boing();
 };
 
@@ -262,7 +295,7 @@ function renderRooms(rooms) {
     const name = document.createElement('span');
     name.textContent = r.name;
     const st = document.createElement('em');
-    const full = r.count >= MAX_PLAYERS || r.state !== 'lobby';
+    const full = (r.humans ?? r.count) >= MAX_PLAYERS || r.state !== 'lobby';
     const mapLabel = r.map === 'random' ? `🎲 ${t('room.random')}` : `${MAPS[r.map]?.emoji ?? ''} ${t(`map.${r.map}`)}`;
     st.textContent = r.state !== 'lobby' ? t('room.fighting') : `${mapLabel} · ${r.count}/${MAX_PLAYERS}`;
     b.append(name, st);
@@ -358,7 +391,8 @@ function renderRoom() {
   myReady = !!me?.ready;
   if (me && document.activeElement !== $('renameInput')) $('renameInput').value = me.name;
   const rb = $('readyBtn');
-  rb.textContent = t(myReady ? 'room.unready' : room.players.length < 2 ? 'room.waiting' : 'room.ready');
+  const onlyBots = room.players.length > 1 && room.players.every((p) => p.isBot || p.id === net.id);
+  rb.textContent = t(myReady ? 'room.unready' : room.players.length < 2 ? 'room.waiting' : onlyBots ? 'room.play' : 'room.ready');
   rb.classList.toggle('on', myReady);
   rb.disabled = room.state !== 'lobby';
   $('botBtn').disabled = room.state !== 'lobby' || room.players.length >= MAX_PLAYERS;
@@ -383,6 +417,8 @@ function showSkinDesc() {
 
 $('readyBtn').onclick = () => {
   sfx.unlock();
+  // 봇전은 이 클릭으로 경기가 바로 시작되니 마우스도 같이 잡아 클릭을 한 번 줄인다
+  if (!myReady && room?.players.length > 1 && room.players.every((p) => p.ready || p.id === net.id)) game.requestLock();
   net.send({ t: 'ready', ready: !myReady });
   sfx.bing();
 };
@@ -398,12 +434,27 @@ $('copyBtn').onclick = async () => {
     toast(t(ws.peerFailed ? 'toast.inviteFail' : 'toast.inviteWait'));
     return;
   }
-  const url = location.href.split('#')[0];
-  try {
-    await navigator.clipboard.writeText(url);
-    toast(P2P ? t('toast.copied', { code: ws.code }) : t('toast.copiedPlain'));
-  } catch { toast(url); }
+  const url = (portal.active && portal.inviteLink(ws.code)) || location.href.split('#')[0];
+  if (await copyText(url)) toast(P2P ? t('toast.copied', { code: ws.code }) : t('toast.copiedPlain'));
+  else toast(url);
 };
+
+// 포털 안(iframe)에서는 클립보드 API가 막힐 수 있다
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const a = document.createElement('textarea');
+    a.value = text;
+    document.body.append(a);
+    a.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { /* 실패 */ }
+    a.remove();
+    return ok;
+  }
+}
 
 $('renameForm').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -491,6 +542,7 @@ function showResult(m) {
   setTimeout(() => {
     if (!inMatch) { hud.show(false); document.getElementById('hudGameLayer').hidden = false; }
   }, 3200);
+  if (won) portal.happytime();
   if (m.sixSeven) {
     sfx.vineBoom();
     sfx.say('six seven! six seven!', { pitch: 0.2, rate: 0.75 });
@@ -574,16 +626,71 @@ for (const b of document.querySelectorAll('#langPick button')) {
 }
 applyLanguage();
 
-// 시작
-showScreen('home');
-hud.show(false);
-game.setAttract([]);
-connect();
+window.__aura = { game, net, sfx, hud, portal, H };
 
-window.__aura = { game, net, sfx, hud };
+// 포털이 정한 채팅 끄기, 음소거를 따른다
+function chatOff() { return !!portal.settings().disableChat; }
+function applyPortalSettings() {
+  document.body.classList.toggle('noChat', chatOff());
+  sfx.setHold('portal', !!portal.settings().muteAudio);
+}
 
-// 첫 화면이 뜬 다음에 캐릭터 얼굴을 찍어 교체한다
-setTimeout(() => {
-  makePortraits();
-  if (room) { renderRoom(); renderSkins($('skinPick')); showSkinDesc(); }
-}, 60);
+// CrazyGames 초대: 시작 시 파라미터, 또는 게임 중 친구 방 입장(새로고침으로 다시 시작)
+function resolvePortalInvite() {
+  let pending = null, skip = null;
+  try {
+    pending = sessionStorage.getItem('aura-join-code');
+    skip = sessionStorage.getItem('aura-skip-invite');
+    sessionStorage.removeItem('aura-join-code');
+  } catch { /* 무시 */ }
+  const code = pending || portal.invite() || inviteCode;
+  setInviteCode(code && code === skip ? null : code);
+  portal.onJoin((params) => {
+    if (!params?.room || params.room === net.ws?.code) return;
+    try {
+      sessionStorage.setItem('aura-join-code', params.room);
+      sessionStorage.removeItem('aura-skip-invite');
+    } catch { /* 무시 */ }
+    location.reload();
+  });
+}
+
+// 로그인한 사람은 크레이지게임즈 닉네임을 쓴다. 게스트는 그대로 닉네임을 정할 수 있다
+async function applyPortalUser() {
+  const useName = (user) => {
+    if (!user?.username) return;
+    $('nameInput').value = user.username;
+    $('nameInput').closest('label').hidden = true;
+    $('renameForm').hidden = true;
+    if (room) net.send({ t: 'rename', name: user.username });
+    else sendHello();
+  };
+  useName(await portal.user());
+  portal.onLogin(useName);
+}
+
+async function start() {
+  if (portal.active) {
+    await portal.init();
+    portal.loadingStart();
+    suggestLang(portal.locale());
+    applyLanguage();
+    applyPortalSettings();
+    portal.onSettings(applyPortalSettings);
+    resolvePortalInvite();
+    await applyPortalUser();
+  } else {
+    showScreen('home');
+  }
+  hud.show(false);
+  game.setAttract([]);
+  connect();
+
+  // 첫 화면이 뜬 다음에 캐릭터 얼굴을 찍어 교체한다
+  setTimeout(() => {
+    makePortraits();
+    if (room) { renderRoom(); renderSkins($('skinPick')); showSkinDesc(); }
+    portal.loadingStop();
+  }, 60);
+}
+start();

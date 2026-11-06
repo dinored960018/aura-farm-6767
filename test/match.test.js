@@ -7,6 +7,7 @@ import { WEAPONS, NUKE, MAX_PLAYERS } from '../shared/constants.js';
 import { MAPS, MAP_IDS, groundAt, rayPlayer, rayWorld } from '../shared/map.js';
 import { newBody, stepBodyFixed } from '../shared/physics.js';
 import { navFor, findPath, advance } from '../server/nav.js';
+import { cleanText } from '../shared/filter.js';
 
 const TIMINGS = { countdownMs: 60, respawnMs: 40, invulnMs: 0, resultsMs: 150, eventFirstMs: 999999 };
 let srv;
@@ -112,6 +113,36 @@ test('상대가 경기 중 나가면 남은 사람 승리 후 대기실로', asy
   await a.wait((m) => m.t === 'backToLobby');
   a.ws.close();
   await sleep(50);
+});
+
+test('방이 봇으로 차 있어도 사람이 들어오면 봇이 자리를 내준다', async () => {
+  const a = await new C().open('A');
+  const b = await new C().open('B');
+  a.send({ t: 'create', name: 'bots' });
+  const made = await a.wait((m) => m.t === 'room');
+  for (let i = 1; i < MAX_PLAYERS; i++) a.send({ t: 'addBot' });
+  await a.wait((m) => m.t === 'room' && m.room.players.length === MAX_PLAYERS);
+  b.send({ t: 'join', id: made.room.id });
+  const joined = await b.wait((m) => m.t === 'room');
+  assert.equal(joined.room.players.length, MAX_PLAYERS);
+  assert.equal(joined.room.players.filter((p) => !p.isBot).length, 2);
+  a.ws.close();
+  b.ws.close();
+});
+
+test('채팅과 닉네임의 욕설을 가리고 정상 단어는 그대로 둔다', async () => {
+  assert.equal(cleanText('class assume hello'), 'class assume hello');
+  assert.equal(cleanText('you f4ck shit'), 'you **** ****');
+  assert.equal(cleanText('이 병신아'), '이 ***');
+  const a = await new C().open('A');
+  a.send({ t: 'create', name: 'x' });
+  await a.wait((m) => m.t === 'room');
+  const said = a.wait((m) => m.t === 'chat');
+  a.send({ t: 'chat', text: 'nice shit' });
+  assert.equal((await said).text, 'nice ****');
+  a.send({ t: 'rename', name: 'bitch' });
+  await a.wait((m) => m.t === 'room' && m.room.players.some((p) => p.name === '*****'));
+  a.ws.close();
 });
 
 test('봇 추가하면 바로 싸울 수 있고 봇이 스스로 움직인다', async () => {
@@ -239,14 +270,14 @@ test('대기실에서 닉변하면 모두에게 보이고, 경기 중에는 안 
   await note;
   a.send({ t: 'rename', name: '   ' });
   a.send({ t: 'rename', name: 'x'.repeat(50) });
-  await a.wait((m) => m.t === 'room' && m.room.players.some((p) => p.name === 'x'.repeat(12)));
+  await a.wait((m) => m.t === 'room' && m.room.players.some((p) => p.name === 'x'.repeat(20)));
   const go = a.wait((m) => m.t === 'go');
   a.send({ t: 'ready', ready: true });
   b.send({ t: 'ready', ready: true });
   await go;
   a.send({ t: 'rename', name: '경기중닉변' });
   await sleep(40);
-  assert.equal(roomOf(a).players.find((p) => p.id === a.id).name, 'x'.repeat(12));
+  assert.equal(roomOf(a).players.find((p) => p.id === a.id).name, 'x'.repeat(20));
   a.ws.close(); b.ws.close();
   await sleep(50);
 });

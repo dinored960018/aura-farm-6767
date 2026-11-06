@@ -22,6 +22,7 @@ const en = {
   'room.renamePh': 'Nickname',
   'room.rename': 'Rename',
   'room.ready': 'Ready 🗿',
+  'room.play': 'PLAY NOW 🗿',
   'room.unready': 'Cancel ready',
   'room.waiting': 'Ready (waiting for players)',
   'room.invite': '🔗 Invite',
@@ -29,13 +30,13 @@ const en = {
   'room.map': 'Map',
   'room.character': 'Your character',
   'room.chat': 'Chat',
-  'room.chatPh': 'Talk trash',
+  'room.chatPh': 'Say something',
   'room.send': 'Send',
   'room.controls': 'Controls',
   'room.me': ' (you)',
   'room.wins': '{n}W',
   'room.isReady': 'Ready',
-  'room.notReady': 'On their phone',
+  'room.notReady': 'Not ready',
   'room.empty': 'Empty slot',
   'room.emptySub': 'Friend or bot',
   'room.random': 'Random',
@@ -76,7 +77,7 @@ const en = {
   'hud.respawn': 'Respawning... enjoy their aura meanwhile',
   'hud.lock': 'Click to fight',
   'hud.lockSub': 'Esc releases the mouse',
-  'hud.quote': 'Now I am become Death, the destroyer of worlds',
+  'hud.quote': 'Tactical nuke incoming. Touch grass while you still can',
   'hud.nukeOther': '{name} launched a nuke. Get behind a wall!',
   'hud.nukeMine': 'Nuke launched. You are radiation-proof.',
   'hud.deathFall': 'Fell into Ohio',
@@ -124,9 +125,9 @@ const en = {
   'tts.meow': 'meow',
 
   'shout.flipped': 'CONTROLS FLIPPED!!', 'skin.minsu': 'Minsu', 'skin.sigma': 'Sigma', 'skin.cat': 'Smug Cat', 'skin.cone': 'Ohio Local', 'skin.toilet': 'Toilet Man',
-  'skin.streamer': 'Bark Streamer', 'skin.tung': 'Tung Sahur', 'skin.hero': 'Invincibro', 'skin.rizz': 'Rizz King', 'skin.chill': 'Chill Dude',
-  'ultra.minsu': 'Eye Laser', 'ultra.sigma': 'Sigma Mode', 'ultra.cat': 'Cat Ambush', 'ultra.cone': 'Oppenheimer', 'ultra.toilet': 'Mega Flush',
-  'ultra.streamer': 'Bark Stream', 'ultra.tung': 'Sahur Time', 'ultra.hero': 'Invincible Punch', 'ultra.rizz': 'Rizz Charm', 'ultra.chill': 'Too Chill',
+  'skin.streamer': 'Bark Streamer', 'skin.tung': 'Tung Sahur', 'skin.hero': 'Mega Bro', 'skin.rizz': 'Rizz King', 'skin.chill': 'Chill Dude',
+  'ultra.minsu': 'Eye Laser', 'ultra.sigma': 'Sigma Mode', 'ultra.cat': 'Cat Ambush', 'ultra.cone': 'Nuke Mode', 'ultra.toilet': 'Mega Flush',
+  'ultra.streamer': 'Bark Stream', 'ultra.tung': 'Sahur Time', 'ultra.hero': 'Mega Punch', 'ultra.rizz': 'Rizz Charm', 'ultra.chill': 'Too Chill',
   'ultraDesc.minsu': 'Eye lasers that pierce walls and bodies for 6.7s. You see enemies through walls.',
   'ultraDesc.sigma': '1.4x speed, 1.67x damage, no knockback. Every kill heals and extends it.',
   'ultraDesc.cat': 'Latch onto a face, steal aura and flip their controls. Victim presses F to shake you off.',
@@ -134,7 +135,7 @@ const en = {
   'ultraDesc.toilet': 'Suck everyone in for 5s, then launch them all with a geyser.',
   'ultraDesc.streamer': 'Run fast and bark 6 times. The last one is a shout in every direction.',
   'ultraDesc.tung': '7 growing shockwaves. The 7th SAHUR is the biggest.',
-  'ultraDesc.hero': 'Invincible flight through 3 enemies. Each punch hits harder and splashes nearby.',
+  'ultraDesc.hero': 'Unstoppable flight through 3 enemies. Each punch hits harder and splashes nearby.',
   'ultraDesc.rizz': 'Enemies walk to you and cannot attack. Up close you drain their aura and health.',
   'ultraDesc.chill': 'Immune for 5s and healing. Bullets bounce back. Nearby enemies slow down.',
   'weapon.fart': 'Fart SMG', 'weapon.six7': '67 Revolver', 'weapon.boom': 'Vine Boom Shotgun', 'weapon.laser': 'Eye Laser',
@@ -173,6 +174,7 @@ const ko = {
   'room.renamePh': '닉네임',
   'room.rename': '닉변',
   'room.ready': '준비 완료 🗿',
+  'room.play': '바로 시작 🗿',
   'room.unready': '준비 취소',
   'room.waiting': '준비 (상대 기다리는 중)',
   'room.invite': '🔗 초대',
@@ -180,13 +182,13 @@ const ko = {
   'room.map': '맵',
   'room.character': '내 캐릭터',
   'room.chat': '채팅',
-  'room.chatPh': '도발 한마디',
+  'room.chatPh': '한마디',
   'room.send': '전송',
   'room.controls': '조작',
   'room.me': ' (나)',
   'room.wins': '{n}승',
   'room.isReady': '준비 완료',
-  'room.notReady': '폰 보는 중',
+  'room.notReady': '준비 안 함',
   'room.empty': '빈자리',
   'room.emptySub': '친구 또는 봇',
   'room.random': '랜덤',
@@ -227,7 +229,7 @@ const ko = {
   'hud.respawn': '부활 중... 그동안 상대 아우라 감상하셈',
   'hud.lock': '클릭해서 참전',
   'hud.lockSub': 'Esc 누르면 마우스 풀림',
-  'hud.quote': '이제 나는 죽음이요, 세계의 파괴자가 되었다',
+  'hud.quote': '전술핵 투하. 아직 잔디 만질 수 있을 때 만져라',
   'hud.nukeOther': '{name}: 핵 쐈다. 벽 뒤로 숨어라',
   'hud.nukeMine': '핵 발사. 넌 방사능 면역임',
   'hud.deathFall': '오하이오로 추락함',
@@ -275,9 +277,9 @@ const ko = {
   'tts.meow': '냥',
 
   'shout.flipped': '조작 뒤집힘!!', 'skin.minsu': '민수', 'skin.sigma': '시그마', 'skin.cat': '킹받는 고양이', 'skin.cone': '오하이오 주민', 'skin.toilet': '변기맨',
-  'skin.streamer': '짖는 스트리머', 'skin.tung': '퉁퉁퉁 사후르', 'skin.hero': '인빈시브로', 'skin.rizz': '리즈왕', 'skin.chill': '칠가이',
-  'ultra.minsu': '눈깔 레이저', 'ultra.sigma': '시그마 각성', 'ultra.cat': '냥냥 급습', 'ultra.cone': '오펜하이머', 'ultra.toilet': '대물내림',
-  'ultra.streamer': '짖기 방송', 'ultra.tung': '사후르 타임', 'ultra.hero': '무적 펀치', 'ultra.rizz': '리즈 매혹', 'ultra.chill': '완전 칠함',
+  'skin.streamer': '짖는 스트리머', 'skin.tung': '퉁퉁퉁 사후르', 'skin.hero': '메가브로', 'skin.rizz': '리즈왕', 'skin.chill': '칠가이',
+  'ultra.minsu': '눈깔 레이저', 'ultra.sigma': '시그마 각성', 'ultra.cat': '냥냥 급습', 'ultra.cone': '핵 모드', 'ultra.toilet': '대물내림',
+  'ultra.streamer': '짖기 방송', 'ultra.tung': '사후르 타임', 'ultra.hero': '메가 펀치', 'ultra.rizz': '리즈 매혹', 'ultra.chill': '완전 칠함',
   'ultraDesc.minsu': '6.7초간 벽과 몸을 뚫는 눈깔 레이저. 벽 뒤 상대도 보임',
   'ultraDesc.sigma': '이동 1.4배, 데미지 1.67배, 안 밀림. 킬마다 회복과 시간 연장',
   'ultraDesc.cat': '얼굴에 붙어 아우라를 훔치고 조작을 뒤집음. 맞는 쪽은 F로 떼어냄',
@@ -327,6 +329,12 @@ try {
 } catch { /* 저장 안 되는 브라우저 */ }
 
 export const getLang = () => lang;
+// 저장된 선택이 없으면 포털이 알려 준 언어를 쓴다. 저장하지 않는다
+export function suggestLang(locale) {
+  let saved = null;
+  try { saved = localStorage.getItem('aura-lang'); } catch { /* 무시 */ }
+  if (!saved) lang = String(locale ?? '').toLowerCase().startsWith('ko') ? 'ko' : 'en';
+}
 export const ttsLang = () => (lang === 'ko' ? 'ko-KR' : 'en-US');
 
 export function setLang(next) {

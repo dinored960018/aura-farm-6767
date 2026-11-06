@@ -2,6 +2,7 @@
 import { Room, TICK_MS } from './room.js';
 import { Player } from './player.js';
 import { SKIN_IDS, TICK_HZ } from '../shared/constants.js';
+import { cleanText } from '../shared/filter.js';
 
 class HumanPlayer extends Player {
   constructor(id, name, skin, rawSend) {
@@ -12,9 +13,9 @@ class HumanPlayer extends Player {
   sendRaw(raw) { this.rawSend(raw); }
 }
 
-function cleanName(v, fallback, max = 12) {
+function cleanName(v, fallback, max = 20) { // 크레이지게임즈 닉네임이 최대 20자
   const s = String(v ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, max);
-  return s || fallback;
+  return s ? cleanText(s) : fallback;
 }
 
 export function createHub({ timings = {}, autoTick = true } = {}) {

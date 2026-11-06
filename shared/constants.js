@@ -60,11 +60,11 @@ export const ULTRAS = {
   minsu: { name: '눈깔 레이저', ms: 6700, desc: '6.7초간 벽까지 뚫는 레이저. 벽 뒤 상대도 보임' },
   sigma: { name: '시그마 각성', ms: 6700, desc: '이동 1.4배, 데미지 1.67배, 안 밀림. 킬마다 시간 연장과 회복' },
   cat: { name: '냥냥 급습', ms: 6700, desc: '얼굴에 붙어 아우라를 훔치고 조작을 뒤집음. F로 떼어냄' },
-  cone: { name: '오펜하이머', ms: 2600, desc: '조준한 곳에 핵. 터진 뒤 방사능 지대가 남음' },
+  cone: { name: '핵 모드', ms: 2600, desc: '조준한 곳에 핵. 터진 뒤 방사능 지대가 남음' },
   toilet: { name: '대물내림', ms: 5000, desc: '5초간 빨아들이고, 끝날 때 물기둥으로 다 띄움' },
   streamer: { name: '짖기 방송', ms: 4800, desc: '빨리 달리며 6번 짖기. 마지막은 사방으로 터지는 샤우팅' },
   tung: { name: '사후르 타임', ms: 4700, desc: '점점 커지는 충격파 7번. 7번째 사후르가 제일 큼' },
-  hero: { name: '무적 펀치', ms: 5000, desc: '무적 상태로 셋을 관통. 때릴수록 세지고 주변까지 터짐' },
+  hero: { name: '메가 펀치', ms: 5000, desc: '무적 상태로 셋을 관통. 때릴수록 세지고 주변까지 터짐' },
   rizz: { name: '리즈 매혹', ms: 3500, desc: '상대가 걸어오고 공격 못 함. 가까이 오면 아우라와 체력을 뺏음' },
   chill: { name: '완전 칠함', ms: 5000, desc: '5초간 무적에 체력 회복. 쏜 총알은 되돌아감. 주변은 느려짐' },
 };
@@ -85,7 +85,7 @@ export const SKINS = {
   toilet: { name: '변기맨', skin: 0xffc6a8, shirt: 0xffffff },
   streamer: { name: '짖는 스트리머', skin: 0x6e4426, shirt: 0xd81e2c },
   tung: { name: '퉁퉁퉁 사후르', skin: 0xa8743f, shirt: 0x8f5f30 },
-  hero: { name: '인빈시브로', skin: 0xf2c6a0, shirt: 0xffd21f },
+  hero: { name: '메가브로', skin: 0xf2c6a0, shirt: 0xe8342c },
   rizz: { name: '리즈왕', skin: 0xf2c6a0, shirt: 0xff3d9a },
   chill: { name: '칠가이', skin: 0xb98d62, shirt: 0x8b9099 },
 };
