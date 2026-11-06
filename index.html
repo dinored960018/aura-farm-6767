@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AURA FARM 6767</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗿</text></svg>">
+<link rel="stylesheet" href="style.css?v=mw4ctp7i">
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<!-- 경기 화면 -->
+<div id="hud" hidden>
+  <div id="vignette"></div>
+  <div id="ultraFrame" hidden><span id="ultraLabel">SIGMA MODE</span><div id="ultraTimeBox"><div id="ultraTime"></div></div></div>
+  <div id="claws"></div>
+  <div id="grabFace" hidden>😼</div>
+  <div id="charmFx" hidden>💖</div>
+  <div id="slowFx" hidden></div>
+  <div id="nukeFlash"></div>
+  <div id="oppen" hidden>
+    <div class="bar-top"></div>
+    <div class="bar-bottom">
+      <p data-i18n="hud.quote"></p>
+      <small id="oppenBy"></small>
+    </div>
+  </div>
+  <div id="hudGameLayer">
+    <div id="scoreBox">
+      <div id="timerBox"><small data-i18n="hud.first7"></small><i id="timer">6:07</i></div>
+      <div id="scoreChips"></div>
+    </div>
+    <div id="killfeed"></div>
+    <div id="eventBanner" hidden></div>
+
+    <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+    <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
+    <div id="damageDir"></div>
+    <div id="sixSeven"></div>
+    <div id="bigCount" hidden></div>
+    <div id="shout"></div>
+    <div id="auraPops"></div>
+
+    <div id="bigEyes"><div class="bigeye l"><u></u></div><div class="bigeye r"><u></u></div></div>
+
+    <div id="hudFace"></div>
+    <div id="vitals">
+      <div class="bar hp"><div id="hpBar"></div><span id="hpText"></span></div>
+      <div class="bar aura"><div id="auraBar"></div><span id="auraText">AURA 0 / 6,767</span></div>
+      <div id="ultraReady" hidden></div>
+    </div>
+    <div id="weaponBox">
+      <div id="reloadText" hidden></div>
+      <div id="weaponName"></div>
+      <div id="ammo">67 / 67</div>
+    </div>
+    <div id="keys">
+      <span data-i18n-html="keys.g"></span>
+      <span data-i18n-html="keys.t"></span>
+      <span data-i18n-html="keys.f"></span>
+      <span data-i18n-html="keys.shift"></span>
+      <span data-i18n-html="keys.space"></span>
+      <span data-i18n-html="keys.num"></span>
+    </div>
+    <div id="ticker"></div>
+
+    <div id="killCut" hidden>
+      <div class="lines"></div>
+      <div class="cutface"><div class="bigeye l"><u></u></div><div class="bigeye r"><u></u></div><div class="cutmouth"></div></div>
+      <div id="killCutText"></div>
+    </div>
+
+    <div id="death" hidden>
+      <h2 id="deathLine"></h2>
+      <p id="deathBy"></p>
+      <div class="respawn"><div id="deathBar"></div></div>
+      <small data-i18n="hud.respawn"></small>
+    </div>
+
+    <div id="lockHint" hidden><b data-i18n="hud.lock"></b><small data-i18n="hud.lockSub"></small></div>
+  </div>
+  <div id="rain"></div>
+</div>
+
+<!-- 첫 화면: 방 목록 -->
+<section id="home" class="panelScreen" hidden>
+  <header class="logo">
+    <h1><span>AURA FARM</span><em>6767</em></h1>
+    <p data-i18n="home.tagline"></p>
+  </header>
+  <div class="card">
+    <label><span data-i18n="home.nickname"></span><input id="nameInput" maxlength="12" data-i18n-ph="home.nickPh" autocomplete="off"></label>
+    <div class="row">
+      <input id="roomNameInput" maxlength="20" data-i18n-ph="home.roomPh" autocomplete="off">
+      <button id="createBtn" class="primary" data-i18n="home.create"></button>
+    </div>
+    <form id="joinRow" class="row" hidden>
+      <input id="joinInput" maxlength="8" data-i18n-ph="home.joinPh" autocomplete="off">
+      <button class="ghost" data-i18n="home.join"></button>
+    </form>
+    <h2 data-i18n="home.rooms"></h2>
+    <div id="roomList"></div>
+    <div class="foot">
+      <span id="connStatus" data-i18n="home.finding"></span>
+      <span id="ping"></span>
+      <div id="langPick" role="group" aria-label="Language"><button type="button" data-lang="en">ENG</button><button type="button" data-lang="ko">KR</button></div>
+      <label class="vol">🔊 <input id="volume" type="range" min="0" max="1" step="0.05" value="0.8"></label>
+    </div>
+  </div>
+</section>
+
+<!-- 대기실 -->
+<section id="room" class="panelScreen roomLayout" hidden>
+  <div class="card side">
+    <div class="titleRow"><h2 id="roomTitle"></h2><button id="leaveBtn" class="ghost" data-i18n="room.leave"></button></div>
+    <form id="renameForm" class="row">
+      <input id="renameInput" maxlength="12" data-i18n-ph="room.renamePh" autocomplete="off" aria-label="Nickname">
+      <button class="ghost" data-i18n="room.rename"></button>
+    </form>
+    <div id="slots"></div>
+    <button id="readyBtn" class="primary big"></button>
+    <div class="row">
+      <button id="botBtn" class="ghost">🤖 Bot+</button>
+      <button id="botOutBtn" class="ghost">Bot−</button>
+      <button id="copyBtn" class="ghost" data-i18n="room.invite" data-i18n-title="room.inviteTitle"></button>
+    </div>
+    <h3 class="chatBit" data-i18n="room.chat"></h3>
+    <div id="chatLog" class="chatBit"></div>
+    <form id="chatForm" class="row chatBit"><input id="chatInput" maxlength="120" data-i18n-ph="room.chatPh" autocomplete="off"><button class="ghost" data-i18n="room.send"></button></form>
+  </div>
+  <div class="card side right">
+    <h3 data-i18n="room.map"></h3>
+    <div id="mapPick"></div>
+    <h3 data-i18n="room.character"></h3>
+    <div id="skinPick"></div>
+    <p id="skinDesc"></p>
+    <h3 data-i18n="room.controls"></h3>
+    <ul class="help">
+      <li data-i18n-html="help.1"></li>
+      <li data-i18n-html="help.2"></li>
+      <li data-i18n-html="help.3"></li>
+      <li data-i18n-html="help.4"></li>
+      <li data-i18n-html="help.5"></li>
+      <li data-i18n-html="help.6"></li>
+    </ul>
+  </div>
+</section>
+
+<!-- 결과 -->
+<section id="result" class="panelScreen" hidden>
+  <div class="resultBox">
+    <div id="sixSevenBanner" hidden data-i18n="result.sixSeven"></div>
+    <h1 id="resultTitle"></h1>
+    <p id="resultSub"></p>
+    <div id="resultStats"></div>
+    <p id="resultCountdown"></p>
+  </div>
+</section>
+
+<div id="toast" hidden></div>
+<div id="adBlock" hidden></div>
+<script type="module" src="js/main.js?v=mw4ctp7i"></script>
+</body>
+</html>
