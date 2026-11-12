@@ -416,3 +416,42 @@ body.noChat .chatBit { display: none; }
   #auraPops { left: 62px; }
   .chipFace { display: none; }
 }
+
+/* ------- 진행: 레벨, 코인, 미션, 보상 ------- */
+.coin { width: 18px; height: 18px; flex: none; fill: var(--gold); stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.coin path { fill: none; }
+#profileBar { display: flex; align-items: center; gap: 8px; }
+#profileBar .lv { font: 400 18px/1 var(--meme); background: var(--ink); color: var(--gold); padding: 4px 7px 3px; border-radius: 3px; white-space: nowrap; }
+.xp { flex: 1; height: 12px; border: 3px solid var(--ink); border-radius: 3px; background: #fff; overflow: hidden; }
+.xp i { display: block; height: 100%; background: repeating-linear-gradient(-45deg, var(--pink) 0 6px, #ff5c9b 6px 12px); transition: width 1.1s cubic-bezier(.16, 1, .3, 1); }
+.coins { display: flex; align-items: center; gap: 4px; font: 400 18px/1 var(--meme); }
+#missions { display: flex; flex-direction: column; gap: 4px; }
+.mission { position: relative; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 6px 8px; border: 3px solid var(--ink); border-radius: 4px; background: #fff; overflow: hidden; font-size: 12.5px; font-weight: 800; }
+.mission > i { position: absolute; inset: 0 auto 0 0; background: #fff1b8; z-index: 0; }
+.mission > * { position: relative; }
+.mission small { font-weight: 800; color: #5a5266; font-variant-numeric: tabular-nums; }
+.mission b { display: flex; align-items: center; gap: 3px; font: 400 15px/1 var(--meme); }
+.mission b .coin { width: 15px; height: 15px; }
+.mission.done { background: #c7ffd1; }
+.mission.done > i { background: transparent; }
+.mission.done span { text-decoration: line-through; text-decoration-thickness: 2px; }
+.skinBtn.locked { background: #d9d3e3; cursor: default; }
+.skinBtn.locked .portrait { filter: grayscale(1) brightness(.55) contrast(1.2); }
+.skinBtn.locked em { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; color: #fff; font: 400 14px/1 var(--meme); -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; font-style: normal; }
+.skinBtn.locked em .ico { width: 18px; height: 18px; stroke: #fff; filter: drop-shadow(1px 1px 0 var(--ink)); }
+.skinBtn.locked:hover { background: #d9d3e3; }
+.skinBtn.locked:hover .portrait { transform: none; }
+
+#reward { width: min(720px, 100%); margin: 14px auto 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.gain { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 14px; background: var(--ink); border-radius: 6px; animation: rowIn .45s .3s cubic-bezier(.16, 1, .3, 1) backwards; }
+.gain b { display: flex; align-items: center; gap: 5px; font: 400 22px/1 var(--meme); white-space: nowrap; }
+.gain .c { color: var(--gold); }
+.gain .c .coin { width: 22px; height: 22px; }
+.gain .x { color: #fff; }
+.gain .lv { font: 400 18px/1 var(--meme); color: var(--cyan); white-space: nowrap; }
+.gain .xp { border-color: #fff; }
+.note { margin: 0; display: flex; align-items: center; gap: 8px; font: 400 20px/1.1 var(--meme); color: #fff; -webkit-text-stroke: 1px #000; paint-order: stroke fill; text-shadow: 2px 2px 0 #000; animation: stamp .35s .6s cubic-bezier(.2, 2, .4, 1) backwards; }
+.note.up { font-size: 34px; color: var(--gold); text-shadow: 4px 4px 0 var(--pink); }
+.note.done { color: #c7ffd1; font-size: 17px; }
+.noteFace { width: 44px; height: 44px; object-fit: contain; }
+@keyframes stamp { from { transform: scale(2.2) rotate(-6deg); opacity: 0; } }

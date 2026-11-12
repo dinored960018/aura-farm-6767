@@ -435,6 +435,7 @@ export class Room {
     const kind = ULTRAS[p.skin] ? p.skin : 'sigma';
     const def = ULTRAS[kind];
     p.aura = 0;
+    p.stats.ultras++;
     p.ultraKind = kind;
     p.ultraUntil = now + def.ms;
     p.emote = 0;
@@ -906,6 +907,9 @@ export class Room {
     this.addAura(victim, self ? AURA.fell : AURA.death, self ? 'fall' : 'death');
     if (killer) {
       killer.kills++;
+      // 진행 시스템 미션용 기록
+      if (killer.ultraKind || info.weapon === 'nuke') killer.stats.ultraKills++;
+      if (info.weapon === 'slap') killer.stats.slapKills++;
       killer.stats.streak++;
       if (killer.stats.streak > killer.stats.bestStreak) killer.stats.bestStreak = killer.stats.streak;
       if (!self && info.weapon !== 'bomb') this.addAura(killer, AURA.kill, 'kill');

@@ -41,7 +41,7 @@ export class Player {
     this.lastSixSeven = 0;
     this.movedAt = 0;
     this.history = [];
-    this.stats = { shots: 0, hitShots: 0, headshots: 0, damage: 0, deaths: 0, streak: 0, bestStreak: 0, auraEarned: 0 };
+    this.stats = { shots: 0, hitShots: 0, headshots: 0, damage: 0, deaths: 0, streak: 0, bestStreak: 0, auraEarned: 0, ultras: 0, ultraKills: 0, slapKills: 0 };
   }
 
   pushHistory(now) {

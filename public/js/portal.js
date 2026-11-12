@@ -21,6 +21,17 @@ export const portal = {
     } catch { sdk = null; }
   },
   get ready() { return !!sdk; },
+  // 진행 저장: SDK 저장소는 로그인하면 기기 사이에 동기화된다. 없으면 브라우저 저장소
+  store: {
+    get(k) {
+      if (sdk?.data) { try { return sdk.data.getItem(k); } catch { /* 아래로 */ } }
+      try { return localStorage.getItem(k); } catch { return null; }
+    },
+    set(k, v) {
+      if (sdk?.data) { try { sdk.data.setItem(k, v); return; } catch { /* 아래로 */ } }
+      try { localStorage.setItem(k, v); } catch { /* 무시 */ }
+    },
+  },
   loadingStart: () => guard((s) => { s.game.loadingStart(); }),
   loadingStop: () => guard((s) => { s.game.loadingStop(); }),
   gameplayStart: () => guard((s) => { s.game.gameplayStart(); }),

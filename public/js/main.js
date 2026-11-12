@@ -9,6 +9,12 @@ import { lines, pick } from './memes.js';
 import { makePortraits, faceEl } from './portraits.js';
 import { t, getLang, setLang, suggestLang, applyStatic } from './i18n.js';
 import { portal } from './portal.js';
+import { createProfile, xpNeed } from './profile.js';
+
+// 진행 기록. 포털 SDK가 준비된 뒤에 만든다 (그 전에는 브라우저 저장소)
+let profile = createProfile(portal.store);
+const COIN = '<svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v9M9.5 9.5h4a1.8 1.8 0 0 1 0 3.6h-3a1.8 1.8 0 0 0 0 3.6h4"/></svg>';
+const LOCK = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 
 const $ = (id) => document.getElementById(id);
 const screens = { home: $('home'), room: $('room'), result: $('result') };
@@ -320,6 +326,16 @@ function renderSkins(box) {
     b.setAttribute('aria-label', t(`skin.${id}`));
     b.setAttribute('aria-pressed', id === currentSkin);
     b.append(faceEl(id));
+    if (!profile.unlocked(id)) {
+      b.classList.add('locked');
+      const lock = document.createElement('em');
+      lock.innerHTML = `${LOCK}<span>${profile.unlockLevel(id)}</span>`;
+      b.append(lock);
+      b.title = `${t(`skin.${id}`)} · ${t('toast.locked', { n: profile.unlockLevel(id) })}`;
+      b.onclick = () => { toast(t('toast.locked', { n: profile.unlockLevel(id) })); sfx.click(); };
+      box.append(b);
+      continue;
+    }
     b.onclick = () => {
       currentSkin = id;
       try { localStorage.setItem('aura-skin', id); } catch { /* 무시 */ }
@@ -410,6 +426,34 @@ function renderRoom() {
   renderMaps($('mapPick'));
   renderSkins($('skinPick'));
   showSkinDesc();
+  renderProfile();
+}
+
+// 레벨, 경험치, 코인 띠와 오늘의 미션
+function renderProfile() {
+  const d = profile.data;
+  const bar = $('profileBar');
+  bar.innerHTML = `<b class="lv"></b><span class="xp"><i></i></span><span class="coins">${COIN}<b></b></span>`;
+  bar.querySelector('.lv').textContent = t('prof.level', { n: d.level });
+  bar.querySelector('.xp i').style.width = `${Math.min(100, (d.xp / xpNeed(d.level)) * 100)}%`;
+  bar.querySelector('.coins b').textContent = d.coins.toLocaleString();
+  const box = $('missions');
+  box.replaceChildren();
+  for (const m of profile.missions()) {
+    const row = document.createElement('div');
+    row.className = `mission${m.done ? ' done' : ''}`;
+    const txt = document.createElement('span');
+    txt.textContent = t(`mission.${m.id}`, { n: m.goal.toLocaleString() });
+    const prog = document.createElement('small');
+    prog.textContent = `${m.n.toLocaleString()} / ${m.goal.toLocaleString()}`;
+    const fill = document.createElement('i');
+    fill.style.width = `${(m.n / m.goal) * 100}%`;
+    const pay = document.createElement('b');
+    pay.innerHTML = COIN;
+    pay.append(String(m.coins));
+    row.append(fill, txt, prog, pay);
+    box.append(row);
+  }
 }
 
 // 공개 방은 경기가 끝나면 알아서 다음 판이 시작된다. 남은 시간을 시작 버튼에 붙인다
@@ -559,6 +603,8 @@ function showResult(m) {
     table.append(row);
   });
 
+  showReward(m);
+
   // 대기실 복귀 카운트다운
   const end = Date.now() + m.resultsMs;
   const tick = () => {
@@ -586,6 +632,37 @@ function showResult(m) {
     sfx.sadTrombone();
     sfx.say(pick(['bruh', 'you are the N P C', 'skill issue']), { pitch: 0.3, lang: 'en-US' });
   }
+}
+
+function showReward(m) {
+  const box = $('reward');
+  box.replaceChildren();
+  const me = m.players.find((p) => p.id === net.id);
+  if (!me) return;
+  const r = profile.record({ kills: me.kills, won: m.winner === net.id, stats: me.stats });
+  const line = document.createElement('div');
+  line.className = 'gain';
+  line.innerHTML = `<b class="c">${COIN}<span></span></b><b class="x"></b><span class="lv"></span><span class="xp"><i></i></span>`;
+  line.querySelector('.c span').textContent = t('reward.coins', { n: r.coins });
+  line.querySelector('.x').textContent = t('reward.xp', { n: r.xp });
+  line.querySelector('.lv').textContent = t('prof.level', { n: r.level });
+  const fill = line.querySelector('.xp i');
+  const pct = Math.min(100, (profile.data.xp / xpNeed(r.level)) * 100);
+  fill.style.width = r.levelUp ? '0%' : `${Math.min(100, (r.before.xp / xpNeed(r.level)) * 100)}%`;
+  requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.width = `${pct}%`; }));
+  box.append(line);
+  const notes = [];
+  if (r.levelUp) notes.push(['up', t('reward.levelUp')]);
+  for (const s of r.unlocked) notes.push(['new', t('reward.unlocked', { name: t(`skin.${s}`) }), s]);
+  for (const mm of r.done) notes.push(['done', t('reward.mission', { text: t(`mission.${mm.id}`, { n: mm.goal.toLocaleString() }) })]);
+  for (const [k, txt, skin] of notes) {
+    const n = document.createElement('p');
+    n.className = `note ${k}`;
+    if (skin) n.append(faceEl(skin, 'noteFace'));
+    n.append(txt);
+    box.append(n);
+  }
+  if (r.levelUp) { sfx.airhorn(); portal.happytime(); }
 }
 
 // ---------- 잡것 ----------
@@ -715,6 +792,7 @@ async function start() {
     applyPortalSettings();
     portal.onSettings(applyPortalSettings);
     resolvePortalInvite();
+    profile = createProfile(portal.store);
     await applyPortalUser();
     // 초대 받은 게 아니고 친구와 바로 하기도 아니면, 모르는 사람이 있는 공개 방부터 찾는다
     if (!inviteCode && !portal.instant()) {
@@ -725,6 +803,7 @@ async function start() {
   } else {
     showScreen('home');
   }
+  if (!profile.unlocked(currentSkin)) currentSkin = 'minsu';
   hud.show(false);
   game.setAttract([]);
   connect();
