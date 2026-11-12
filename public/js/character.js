@@ -1009,7 +1009,25 @@ export class Character {
     this.blob.material.opacity = 0.55 * k;
   }
 
+  // 포즈 값은 정면이 +z인 기준으로 짜여 있는데 몸은 -z를 본다.
+  // 그래서 관절 회전의 x, y를 뒤집어 앞뒤를 맞춘다. 매 프레임 원래 값으로 되돌린 뒤 계산하고 다시 뒤집는다
+  // (어떤 관절은 일부 포즈에서만 값을 넣기 때문). 사망 연출은 원래 기준이 맞아서 뒤집지 않는다.
+  mirrorJoints() {
+    if (!this.joints) {
+      const arms = [this.armL, this.armR];
+      const legs = [this.legL, this.legR];
+      this.joints = [this.visual, this.head, ...arms, ...arms.map((a) => a.userData.fore), ...legs, ...legs.map((l) => l.userData.shin), ...legs.map((l) => l.userData.foot)];
+    }
+    for (const o of this.joints) { o.rotation.x = -o.rotation.x; o.rotation.y = -o.rotation.y; }
+  }
+
   update(dt) {
+    if (this.mirrored) { this.mirrorJoints(); this.mirrored = false; }
+    this.updatePose(dt);
+    if (this.deadT < 0) { this.mirrorJoints(); this.mirrored = true; }
+  }
+
+  updatePose(dt) {
     this.time += dt;
     if (this.propeller) this.propeller.rotation.y += dt * 14;
     if (this.hat) this.hat.visible = !this.crown.visible;

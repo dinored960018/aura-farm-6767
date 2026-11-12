@@ -101,23 +101,28 @@
 <div id="rotateHint"><b data-i18n="touch.rotate"></b></div>
 
 <!-- 첫 화면: 방 목록 -->
-<section id="home" class="panelScreen" hidden>
+<section id="home" class="panelScreen homeLayout" hidden>
   <header class="logo">
     <h1><span>AURA FARM</span><em>6767</em></h1>
     <p data-i18n="home.tagline"></p>
   </header>
-  <div class="card">
-    <label><span data-i18n="home.nickname"></span><input id="nameInput" maxlength="12" data-i18n-ph="home.nickPh" autocomplete="off"></label>
-    <div class="row">
-      <input id="roomNameInput" maxlength="20" data-i18n-ph="home.roomPh" autocomplete="off">
-      <button id="createBtn" class="primary" data-i18n="home.create"></button>
+  <div class="homeMain">
+    <label class="nameTag"><span data-i18n="home.nickname"></span><input id="nameInput" maxlength="20" data-i18n-ph="home.nickPh" autocomplete="off"></label>
+    <button id="playBtn" class="primary mega"><b data-i18n="home.play"></b><small data-i18n="home.playSub"></small></button>
+    <div class="homeSub">
+      <button id="createBtn" class="ghost" data-i18n="home.friends"></button>
+      <form id="joinRow" hidden>
+        <input id="joinInput" maxlength="8" data-i18n-ph="home.joinPh" autocomplete="off" aria-label="Invite code">
+        <button class="iconBtn" data-i18n-title="home.join" aria-label="Join"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
+      </form>
     </div>
-    <form id="joinRow" class="row" hidden>
-      <input id="joinInput" maxlength="8" data-i18n-ph="home.joinPh" autocomplete="off">
-      <button class="ghost" data-i18n="home.join"></button>
-    </form>
+    <input id="roomNameInput" type="hidden">
+  </div>
+  <div class="card roomsBox" id="roomsBox" hidden>
     <h2 data-i18n="home.rooms"></h2>
     <div id="roomList"></div>
+  </div>
+  <div class="card homeFoot">
     <div class="foot">
       <span id="connStatus" data-i18n="home.finding"></span>
       <span id="ping"></span>

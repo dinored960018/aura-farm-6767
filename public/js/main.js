@@ -180,6 +180,11 @@ H.left = () => {
 H.room = (m) => {
   const wasIn = !!room;
   room = m.room;
+  if (quickPlay && !wasIn) {
+    quickPlay = false;
+    for (let i = 1; i < MAX_PLAYERS; i++) net.send({ t: 'addBot' });
+    net.send({ t: 'ready', ready: true });
+  }
   syncAddress();
   for (const p of room.players) hud.names.set(p.id, p.name);
   if (inMatch) game.onRoster(room.players);
@@ -285,6 +290,15 @@ function openMyRoom() {
   });
 }
 
+// 바로 플레이: 내 방을 만들고 봇 3명을 넣은 뒤 바로 시작
+let quickPlay = false;
+$('playBtn').onclick = () => {
+  sfx.unlock();
+  sfx.boing();
+  quickPlay = true;
+  openMyRoom();
+};
+
 $('createBtn').onclick = () => {
   sfx.unlock();
   openMyRoom();
@@ -293,6 +307,7 @@ $('createBtn').onclick = () => {
 
 function renderRooms(rooms) {
   lastRooms = rooms;
+  $('roomsBox').hidden = !rooms.length;
   const box = $('roomList');
   box.replaceChildren();
   if (!rooms.length) {
