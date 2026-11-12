@@ -84,6 +84,22 @@
   <div id="rain"></div>
 </div>
 
+<!-- 휴대폰 조작 (경기 중에만) -->
+<div id="touchUi">
+  <div id="lookZone"></div>
+  <div id="moveZone"></div>
+  <div id="stick" hidden><i></i></div>
+  <button class="tb fire" data-act="fire" aria-label="Fire"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg></button>
+  <button class="tb jump" data-act="jump" aria-label="Jump"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 14l6-6 6 6"/><path d="M6 20l6-6 6 6"/></svg></button>
+  <button class="tb dash" data-act="dash" aria-label="Dash"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M2 12h12M4 17h9"/><path d="M15 6l6 6-6 6"/></svg></button>
+  <button class="tb slap" data-act="slap" aria-label="Slap"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V6a1.5 1.5 0 0 1 3 0v4M10 10V4.5a1.5 1.5 0 0 1 3 0V10M13 10V5.5a1.5 1.5 0 0 1 3 0V12M16 11a1.5 1.5 0 0 1 3 0v3a7 7 0 0 1-7 7h-1a6 6 0 0 1-5-3l-2.5-4.3a1.5 1.5 0 0 1 2.6-1.5L7 14"/></svg></button>
+  <button class="tb ultra" data-act="ultra" aria-label="Ultimate"><b>E</b></button>
+  <button class="tb swap" data-act="swap" aria-label="Switch weapon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h14l-4-4M20 15H6l4 4"/></svg></button>
+  <button class="tb zoom" data-act="zoom" aria-label="Zoom"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M11 8v6M8 11h6"/></svg></button>
+  <button class="tb farm" data-act="farm" aria-label="Aura farm"><b>G</b></button>
+</div>
+<div id="rotateHint"><b data-i18n="touch.rotate"></b></div>
+
 <!-- 첫 화면: 방 목록 -->
 <section id="home" class="panelScreen" hidden>
   <header class="logo">

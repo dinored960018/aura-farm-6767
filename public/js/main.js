@@ -10,6 +10,7 @@ import { makePortraits, faceEl, lookShot, closeShopRenderer } from './portraits.
 import { COSMETICS } from '../shared/cosmetics.js';
 import { t, getLang, setLang, suggestLang, applyStatic } from './i18n.js';
 import { portal } from './portal.js';
+import { setupTouch } from './touch.js';
 import { createProfile, xpNeed } from './profile.js';
 
 // 진행 기록. 포털 SDK가 준비된 뒤에 만든다 (그 전에는 브라우저 저장소)
@@ -35,6 +36,7 @@ const net = {
   serverNow() { return Date.now() + this.offset; },
 };
 game.net = net;
+setupTouch(game);
 
 let room = null;
 let lastRooms = [];
@@ -192,6 +194,7 @@ H.room = (m) => {
 H.chat = (m) => { if (!chatOff()) addChat(m.from, m.text); };
 H.matchStart = (m) => {
   inMatch = true;
+  document.body.classList.add('playing');
   sfx.unlock();
   for (const p of m.players) hud.names.set(p.id, p.name);
   showScreen(null);
@@ -244,6 +247,8 @@ H.backToLobby = () => {
 
 function leaveMatchView() {
   inMatch = false;
+  document.body.classList.remove('playing');
+  game.touchMove = null;
   portal.gameplayStop();
   game.onMatchEnd();
   hud.show(false);

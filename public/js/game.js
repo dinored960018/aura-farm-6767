@@ -202,6 +202,8 @@ export class Game {
     this.mouseDown = false;
     this.zoom = false;
     this.locked = false;
+    this.touch = false; // 휴대폰: 마우스 잠금 없이 화면 버튼으로
+    this.touchMove = null;
     this.lastFrame = performance.now();
     this.sendAcc = 0;
     this.attractT = 0;
@@ -568,10 +570,7 @@ export class Game {
     window.addEventListener('blur', () => { this.keys.clear(); this.mouseDown = false; this.zoom = false; });
     document.addEventListener('mousemove', (e) => {
       if (!this.locked || this.mode !== 'match') return;
-      // 고양이가 얼굴에 붙으면 상하좌우가 뒤집힌다
-      const mult = (this.zoom ? 0.0011 : 0.0022) * (this.grabbedBy !== null ? -1 : 1);
-      this.yaw -= clamp(e.movementX, -300, 300) * mult;
-      this.pitch = clamp(this.pitch - clamp(e.movementY, -300, 300) * mult, -1.5, 1.5);
+      this.lookBy(clamp(e.movementX, -300, 300), clamp(e.movementY, -300, 300), 0.0022);
     });
     document.addEventListener('mousedown', (e) => {
       if (this.mode !== 'match') return;
@@ -586,9 +585,7 @@ export class Game {
     document.addEventListener('contextmenu', (e) => { if (this.mode === 'match') e.preventDefault(); });
     document.addEventListener('wheel', (e) => {
       if (this.mode !== 'match' || !this.locked) return;
-      const ids = Object.keys(WEAPONS);
-      const i = ids.indexOf(this.weapon);
-      this.switchWeapon(ids[(i + (e.deltaY > 0 ? 1 : ids.length - 1)) % ids.length]);
+      this.cycleWeapon(e.deltaY > 0 ? 1 : -1);
     }, { passive: true });
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === this.canvas;
@@ -597,7 +594,22 @@ export class Game {
     });
   }
 
+  // 시점 돌리기. 고양이가 얼굴에 붙으면 상하좌우가 뒤집힌다
+  lookBy(dx, dy, sens) {
+    if (this.mode !== 'match') return;
+    const mult = sens * (this.zoom ? 0.5 : 1) * (this.grabbedBy !== null ? -1 : 1);
+    this.yaw -= dx * mult;
+    this.pitch = clamp(this.pitch - dy * mult, -1.5, 1.5);
+  }
+
+  cycleWeapon(dir = 1) {
+    const ids = Object.keys(WEAPONS);
+    const i = ids.indexOf(this.weapon);
+    this.switchWeapon(ids[(i + (dir > 0 ? 1 : ids.length - 1)) % ids.length]);
+  }
+
   requestLock() {
+    if (this.touch) return;
     try {
       const r = this.canvas.requestPointerLock();
       r?.catch?.(() => {});
@@ -719,7 +731,7 @@ export class Game {
     this.hud.reset();
     this.canvas.classList.remove('dead');
     this.requestLock();
-    this.hud.setLockHint(!this.locked);
+    this.hud.setLockHint(!this.locked && !this.touch);
 
     // 6... 7... 시작. 경기 중에 들어온 사람은 바로 싸운다
     const step = m.countdownMs / 3;
@@ -1590,6 +1602,7 @@ export class Game {
 
     let fwd = emote || this.frozen ? 0 : (held('KeyW') ? 1 : 0) - (held('KeyS') ? 1 : 0);
     let right = emote || this.frozen ? 0 : (held('KeyD') ? 1 : 0) - (held('KeyA') ? 1 : 0);
+    if (this.touchMove && !emote && !this.frozen) { fwd = this.touchMove.f; right = this.touchMove.r; }
     if (charmed) {
       // 반한 사람에게 저절로 걸어간다
       const r = this.renderOf(this.charmBy);
