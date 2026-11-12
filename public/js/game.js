@@ -720,8 +720,11 @@ export class Game {
     this.requestLock();
     this.hud.setLockHint(!this.locked);
 
-    // 6... 7... 시작
+    // 6... 7... 시작. 경기 중에 들어온 사람은 바로 싸운다
     const step = m.countdownMs / 3;
+    this.cdTimers = [];
+    this.sfx.stopMusic();
+    if (step <= 0) return;
     this.hud.bigCount('6');
     this.sfx.say('six', { rate: 0.8, pitch: 0.6 });
     this.sfx.bong();
@@ -735,7 +738,15 @@ export class Game {
   // 경기 중 누가 나갔을 때
   onRoster(players) {
     if (this.mode !== 'match') return;
+    const had = new Set(this.chars.keys());
     this.syncChars(players, false);
+    // 경기 중에 새로 들어온 사람: 대기실 모습이 아니라 싸우는 모습으로
+    for (const [id, c] of this.chars) {
+      if (had.has(id)) continue;
+      c.respawn();
+      c.lobby = false;
+      c.emote = 0;
+    }
     for (const id of [...this.buffers.keys()]) if (!this.chars.has(id)) this.buffers.delete(id);
   }
 

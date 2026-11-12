@@ -9,7 +9,7 @@ import { newBody, stepBodyFixed } from '../shared/physics.js';
 import { navFor, findPath, advance } from '../server/nav.js';
 import { cleanText } from '../shared/filter.js';
 
-const TIMINGS = { countdownMs: 60, respawnMs: 40, invulnMs: 0, resultsMs: 150, eventFirstMs: 999999 };
+const TIMINGS = { countdownMs: 60, respawnMs: 40, invulnMs: 0, resultsMs: 150, eventFirstMs: 999999, autoStartMs: 300 };
 let srv;
 before(async () => { srv = await startServer({ port: 0, host: '127.0.0.1', timings: TIMINGS }); });
 after(async () => { await srv.close(); });
@@ -126,6 +126,57 @@ test('방이 봇으로 차 있어도 사람이 들어오면 봇이 자리를 내
   const joined = await b.wait((m) => m.t === 'room');
   assert.equal(joined.room.players.length, MAX_PLAYERS);
   assert.equal(joined.room.players.filter((p) => !p.isBot).length, 2);
+  a.ws.close();
+  b.ws.close();
+});
+
+test('공개 방: 둘이 모이면 알아서 시작하고, 경기 중에도 봇 자리로 들어오며, 나가면 봇이 채운다', async () => {
+  const a = await new C().open('A');
+  a.send({ t: 'create', name: 'pub', public: true });
+  await a.wait((m) => m.t === 'room');
+  for (let i = 0; i < 3; i++) a.send({ t: 'addBot' });
+  await a.wait((m) => m.t === 'room' && m.room.players.length === 4);
+  assert.equal(a.room.public, true);
+  assert.equal(a.room.open, true);
+
+  // 대기실에 한 명 더 오면 준비를 안 눌러도 잠시 뒤 시작
+  const b = await new C().open('B');
+  const started = a.wait((m) => m.t === 'matchStart', 3000);
+  b.send({ t: 'join', id: a.room.id });
+  await b.wait((m) => m.t === 'room' && m.room.players.some((p) => p.id === b.id));
+  assert.ok(b.room.autoStartIn > 0, '자동 시작 예약');
+  await started;
+  await a.wait((m) => m.t === 'go');
+
+  // 경기 중 세 번째 사람: 봇 하나를 밀어내고 바로 경기에 들어간다
+  const c = await new C().open('C');
+  const ms = c.wait((m) => m.t === 'matchStart' && m.dropIn);
+  const go = c.wait((m) => m.t === 'go');
+  c.send({ t: 'join', id: a.room.id });
+  const m = await ms;
+  await go;
+  assert.ok(m.players.some((p) => p.id === c.id));
+  await a.wait((x) => x.t === 'room' && x.room.players.length === 4 && x.room.players.filter((p) => p.isBot).length === 1);
+  await a.wait((x) => x.t === 'snap' && x.players.some((p) => p.id === c.id && p.a));
+
+  // 나가면 봇이 자리를 채워 경기가 계속된다
+  c.ws.close();
+  b.ws.close();
+  await a.wait((x) => x.t === 'room' && x.room.state === 'playing' && x.room.players.length === 4 && x.room.players.filter((p) => p.isBot).length === 3);
+  a.ws.close();
+});
+
+test('비공개 방은 경기 중에 못 들어온다', async () => {
+  const a = await new C().open('A');
+  a.send({ t: 'create', name: 'priv' });
+  await a.wait((m) => m.t === 'room');
+  a.send({ t: 'addBot' });
+  const go = a.wait((m) => m.t === 'go');
+  a.send({ t: 'ready', ready: true });
+  await go;
+  const b = await new C().open('B');
+  b.send({ t: 'join', id: a.room.id });
+  assert.equal((await b.wait((m) => m.t === 'error')).key, 'err.roomFull');
   a.ws.close();
   b.ws.close();
 });

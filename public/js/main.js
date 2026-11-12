@@ -4,7 +4,7 @@ import { MAPS, MAP_IDS } from '../shared/map.js';
 import { Sfx } from './audio.js';
 import { Hud } from './hud.js';
 import { Game } from './game.js';
-import { P2P, inviteCode, inviteUrl, openTransport, setInviteCode } from './transport.js';
+import { P2P, inviteCode, inviteUrl, openTransport, setInviteCode, matchmake, isPublicHost } from './transport.js';
 import { lines, pick } from './memes.js';
 import { makePortraits, faceEl } from './portraits.js';
 import { t, getLang, setLang, suggestLang, applyStatic } from './i18n.js';
@@ -102,9 +102,8 @@ function syncPortalRoom() {
   if (!room) { portal.leftRoom(); return; }
   const code = ws?.code;
   const ok = !!code && (ws.isGuest || ws.registered);
-  const humans = room.players.filter((p) => !p.isBot).length;
   if (!code) return; // SDK는 첫 호출에 방 ID가 있어야 한다
-  portal.updateRoom({ roomId: code, isJoinable: ok && room.state === 'lobby' && humans < MAX_PLAYERS, inviteParams: { room: code } });
+  portal.updateRoom({ roomId: code, isJoinable: ok && !!room.open, inviteParams: { room: code } });
 }
 function leaveToHome(text) {
   toast(text);
@@ -231,8 +230,9 @@ H.backToLobby = () => {
   game.setAttract(room?.players ?? [], room?.mapId);
   sfx.playMusic('lobby');
   addChat(t('system'), t('sys.again'));
-  // 다음 경기는 내가 시작을 눌러야 열리므로 광고 중에 경기가 시작되지 않는다
-  portal.midgame(sfx);
+  // 광고를 보는 동안은 서버가 다음 판 자동 시작을 미룬다
+  net.send({ t: 'busy', on: true });
+  portal.midgame(sfx).then(() => net.send({ t: 'busy', on: false }));
 };
 
 function leaveMatchView() {
@@ -268,6 +268,7 @@ function openMyRoom() {
   net.ws.openInvites?.(() => toast(t('toast.inviteFail')));
   net.send({
     t: 'create',
+    public: isPublicHost(),
     name: $('roomNameInput').value.trim() || t('roomDefault', { name: $('nameInput').value.trim() || t('home.nickPh') }),
   });
 }
@@ -393,6 +394,9 @@ function renderRoom() {
   const rb = $('readyBtn');
   const onlyBots = room.players.length > 1 && room.players.every((p) => p.isBot || p.id === net.id);
   rb.textContent = t(myReady ? 'room.unready' : room.players.length < 2 ? 'room.waiting' : onlyBots ? 'room.play' : 'room.ready');
+  autoStartAt = room.state === 'lobby' && room.autoStartIn ? Date.now() + room.autoStartIn : 0;
+  rb.dataset.label = rb.textContent;
+  showAutoStart();
   rb.classList.toggle('on', myReady);
   rb.disabled = room.state !== 'lobby';
   $('botBtn').disabled = room.state !== 'lobby' || room.players.length >= MAX_PLAYERS;
@@ -401,6 +405,16 @@ function renderRoom() {
   renderSkins($('skinPick'));
   showSkinDesc();
 }
+
+// 공개 방은 경기가 끝나면 알아서 다음 판이 시작된다. 남은 시간을 시작 버튼에 붙인다
+let autoStartAt = 0;
+function showAutoStart() {
+  const rb = $('readyBtn');
+  if (!autoStartAt || screens.room.hidden) return;
+  const s = Math.max(0, Math.ceil((autoStartAt - Date.now()) / 1000));
+  rb.textContent = `${rb.dataset.label} · ${t('room.autoStart', { s })}`;
+}
+setInterval(showAutoStart, 250);
 
 function showSkinDesc() {
   const u = ULTRAS[currentSkin];
@@ -679,6 +693,12 @@ async function start() {
     portal.onSettings(applyPortalSettings);
     resolvePortalInvite();
     await applyPortalUser();
+    // 초대 받은 게 아니고 친구와 바로 하기도 아니면, 모르는 사람이 있는 공개 방부터 찾는다
+    if (!inviteCode && !portal.instant()) {
+      $('connStatus').textContent = t('conn.searching');
+      toast(t('conn.searching'));
+      await matchmake();
+    }
   } else {
     showScreen('home');
   }

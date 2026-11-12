@@ -32,11 +32,24 @@ export class Room {
     this.fallouts = [];
     this.event = null;
     this.nextEventAt = 0;
+    // 공개 방: 모르는 사람이 경기 중에도 봇 자리로 들어오고, 경기가 끝나면 알아서 다음 판이 시작된다
+    this.public = false;
+    this.autoStartAt = 0;
+    this.played = 0;
   }
 
   // ---------- 대기실 ----------
   summary() {
-    return { id: this.id, name: this.name, state: this.state, count: this.players.length, humans: this.players.filter((p) => !p.isBot).length, max: MAX_PLAYERS, map: this.mapChoice };
+    return { id: this.id, name: this.name, state: this.state, count: this.players.length, humans: this.humans(), max: MAX_PLAYERS, map: this.mapChoice, open: this.joinable(), public: this.public };
+  }
+
+  humans() { return this.players.filter((p) => !p.isBot).length; }
+  live() { return this.state === 'countdown' || this.state === 'playing'; }
+
+  // 지금 사람이 더 들어올 수 있나. 봇 자리는 빈자리로 친다
+  joinable() {
+    if (this.humans() >= MAX_PLAYERS) return false;
+    return this.state === 'lobby' || (this.public && this.live());
   }
 
   roomMessage() {
@@ -44,6 +57,8 @@ export class Room {
       t: 'room',
       room: {
         id: this.id, name: this.name, state: this.state, mapChoice: this.mapChoice, mapId: this.map.id,
+        open: this.joinable(), public: this.public,
+        autoStartIn: this.autoStartAt ? Math.max(0, this.autoStartAt - Date.now()) : 0,
         players: this.players.map((p) => ({
           id: p.id, name: p.name, skin: p.skin, ready: p.ready, wins: p.wins, isBot: p.isBot,
         })),
@@ -62,31 +77,75 @@ export class Room {
   }
 
   add(player) {
-    if (this.state !== 'lobby') return false;
+    if (!this.joinable()) return false;
     // 사람이 오면 봇이 자리를 내준다
-    if (this.players.length >= MAX_PLAYERS && this.players.some((p) => p.isBot)) this.removeBot();
-    if (this.players.length >= MAX_PLAYERS) return false;
+    if (this.players.length >= MAX_PLAYERS) {
+      const bot = [...this.players].reverse().find((p) => p.isBot);
+      if (!bot) return false;
+      this.detach(bot);
+    }
     player.room = this;
     player.ready = false;
     player.wins = 0;
+    player.name = this.uniqueName(player.name, player);
     this.players.push(player);
+    if (this.live()) this.dropIn(player);
+    this.armAutoStart();
     this.sendRoom();
     return true;
   }
 
-  remove(player) {
+  // 경기 중에 들어온 사람이나 봇을 바로 경기에 넣는다
+  dropIn(p) {
+    p.resetForMatch();
+    p.ready = true;
+    this.placeAtSpawn(p, this.players.filter((q) => q !== p && q.alive).map((q) => q.pos));
+    if (!p.isBot) {
+      const now = Date.now();
+      p.send({
+        t: 'matchStart',
+        map: this.map.id,
+        countdownMs: this.state === 'countdown' ? Math.max(0, this.stateUntil - now) : 0,
+        endsIn: this.matchEndsAt - now,
+        players: this.players.map((q) => ({ id: q.id, name: q.name, skin: q.skin, pos: q.pos, yaw: q.yaw, isBot: q.isBot })),
+        pickups: this.pickups.map((q) => q.active),
+        dropIn: true,
+      });
+      if (this.state === 'playing') p.send({ t: 'go' });
+    }
+    this.broadcast({ t: 'sys', key: 'sys.joined', vars: { name: p.name } });
+  }
+
+  // 방에서 떼어 낸다. 걸려 있던 각성과 고양이도 정리
+  detach(player) {
     const i = this.players.indexOf(player);
-    if (i < 0) return;
+    if (i < 0) return false;
     if (player.ultraKind) this.endUltra(player, false);
     for (const q of this.players) if (q.cat?.target === player) { q.cat.target = null; q.cat.latched = false; }
     this.players.splice(i, 1);
     player.room = null;
-    const humans = this.players.filter((p) => !p.isBot);
-    if (humans.length === 0) {
+    return true;
+  }
+
+  // 공개 방은 사람이 나간 자리를 봇으로 채워 경기가 계속 굴러가게 한다
+  fillBots() {
+    if (!this.public || this.state === 'results') return;
+    while (this.players.length < MAX_PLAYERS) this.makeBot();
+  }
+
+  armAutoStart() {
+    if (!this.public || this.state !== 'lobby' || this.autoStartAt) return;
+    if (this.humans() >= 2 || this.played > 0) this.autoStartAt = Date.now() + (this.t.autoStartMs ?? 15000);
+  }
+
+  remove(player) {
+    if (!this.detach(player)) return;
+    if (this.humans() === 0) {
       this.players = [];
       this.hub.deleteRoom(this);
       return;
     }
+    this.fillBots();
     if (this.state === 'countdown' || this.state === 'playing') {
       if (this.players.length >= 2) {
         this.broadcast({ t: 'sys', key: 'sys.fled', vars: { name: player.name } });
@@ -106,6 +165,12 @@ export class Room {
 
   addBot() {
     if (this.state !== 'lobby' || this.players.length >= MAX_PLAYERS) return;
+    this.makeBot();
+    this.sendRoom();
+    this.maybeStart();
+  }
+
+  makeBot() {
     const used = new Set(this.players.map((p) => p.name));
     const names = BOT_NAMES.filter((n) => !used.has(n));
     const bot = new Bot(this.hub.nextId(), names[Math.floor(Math.random() * names.length)], SKIN_IDS[Math.floor(Math.random() * SKIN_IDS.length)]);
@@ -113,8 +178,8 @@ export class Room {
     bot.ready = true;
     bot.wins = 0;
     this.players.push(bot);
-    this.sendRoom();
-    this.maybeStart();
+    if (this.live()) this.dropIn(bot);
+    return bot;
   }
 
   removeBot() {
@@ -146,7 +211,18 @@ export class Room {
     this.sendRoom();
   }
 
+  // 같은 이름이 있으면 뒤에 번호를 붙인다 (게스트 기본 이름이 겹치기 쉽다)
+  uniqueName(name, self) {
+    const taken = new Set(this.players.filter((p) => p !== self).map((p) => p.name));
+    if (!taken.has(name)) return name;
+    for (let i = 2; ; i++) {
+      const n = `${name.slice(0, 17)} ${i}`;
+      if (!taken.has(n)) return n;
+    }
+  }
+
   rename(player, name) {
+    name = this.uniqueName(name, player);
     if (this.state !== 'lobby' || player.name === name) return;
     const old = player.name;
     player.name = name;
@@ -171,6 +247,7 @@ export class Room {
       this.map = MAPS[rest[Math.floor(Math.random() * rest.length)]];
     }
     this.state = 'countdown';
+    this.autoStartAt = 0;
     this.stateUntil = now + this.t.countdownMs;
     this.event = null;
     this.bombs = [];
@@ -227,7 +304,18 @@ export class Room {
   }
 
   tick(now, dt) {
-    if (this.state === 'countdown') {
+    if (this.state === 'lobby') {
+      // 광고를 보는 사람이 있으면 끝날 때까지 기다린다
+      if (this.autoStartAt && now >= this.autoStartAt && !this.players.some((p) => p.adBusy)) {
+        if (this.players.length >= 2) {
+          for (const p of this.players) p.ready = true;
+          this.startMatch();
+        } else {
+          this.autoStartAt = 0;
+          this.sendRoom();
+        }
+      }
+    } else if (this.state === 'countdown') {
       if (now >= this.stateUntil) {
         this.state = 'playing';
         this.broadcast({ t: 'go' });
@@ -884,7 +972,10 @@ export class Room {
 
   backToLobby() {
     this.state = 'lobby';
+    this.played++;
     for (const p of this.players) p.ready = p.isBot;
+    this.fillBots();
+    this.armAutoStart();
     this.broadcast({ t: 'backToLobby' });
     this.sendRoom();
   }

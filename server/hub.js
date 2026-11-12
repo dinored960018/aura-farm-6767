@@ -59,7 +59,11 @@ export function createHub({ timings = {}, autoTick = true } = {}) {
         break;
       }
       case 'create':
-        if (!r) createRoom(cleanName(m.name, `${p.name}'s room`, 20)).add(p);
+        if (!r) {
+          const room = createRoom(cleanName(m.name, `${p.name}'s room`, 20));
+          room.public = !!m.public;
+          room.add(p);
+        }
         break;
       case 'join':
         if (!r) {
@@ -71,6 +75,9 @@ export function createHub({ timings = {}, autoTick = true } = {}) {
         if (r) { r.remove(p); p.send({ t: 'left' }); hub.roomsChanged(); }
         break;
       case 'ready': r?.setReady(p, m.ready); break;
+      case 'busy':
+        p.adBusy = !!m.on;
+        break;
       case 'skin':
         if (r) r.setSkin(p, m.skin);
         else if (SKIN_IDS.includes(m.skin)) p.skin = m.skin;

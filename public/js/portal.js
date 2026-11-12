@@ -25,6 +25,7 @@ export const portal = {
   loadingStop: () => guard((s) => { s.game.loadingStop(); }),
   gameplayStart: () => guard((s) => { s.game.gameplayStart(); }),
   gameplayStop: () => guard((s) => { s.game.gameplayStop(); }),
+  instant: () => guard((s) => !!s.game.isInstantMultiplayer, false),
   happytime: () => guard((s) => { s.game.happytime(); }),
   invite: () => guard((s) => s.game.inviteParams?.room ?? s.game.getInviteParam('room')),
   inviteLink: (code) => guard((s) => s.game.inviteLink({ room: code })),
