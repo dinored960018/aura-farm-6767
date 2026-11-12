@@ -297,7 +297,7 @@ function renderRooms(rooms) {
     name.textContent = r.name;
     const st = document.createElement('em');
     const full = (r.humans ?? r.count) >= MAX_PLAYERS || r.state !== 'lobby';
-    const mapLabel = r.map === 'random' ? `🎲 ${t('room.random')}` : `${MAPS[r.map]?.emoji ?? ''} ${t(`map.${r.map}`)}`;
+    const mapLabel = r.map === 'random' ? t('room.random') : t(`map.${r.map}`);
     st.textContent = r.state !== 'lobby' ? t('room.fighting') : `${mapLabel} · ${r.count}/${MAX_PLAYERS}`;
     b.append(name, st);
     b.disabled = full;
@@ -317,10 +317,9 @@ function renderSkins(box) {
     const b = document.createElement('button');
     b.className = `skinBtn${id === currentSkin ? ' on' : ''}`;
     b.title = t(`skin.${id}`);
-    const f = faceEl(id);
-    const n = document.createElement('span');
-    n.textContent = t(`skin.${id}`);
-    b.append(f, n);
+    b.setAttribute('aria-label', t(`skin.${id}`));
+    b.setAttribute('aria-pressed', id === currentSkin);
+    b.append(faceEl(id));
     b.onclick = () => {
       currentSkin = id;
       try { localStorage.setItem('aura-skin', id); } catch { /* 무시 */ }
@@ -339,12 +338,12 @@ function renderMaps(box) {
     const def = MAPS[id];
     const b = document.createElement('button');
     b.className = `mapBtn${room.mapChoice === id ? ' on' : ''}`;
+    b.dataset.map = id;
     b.title = t(def ? `mapDesc.${id}` : 'room.randomDesc');
-    const f = document.createElement('i');
-    f.textContent = def?.emoji ?? '🎲';
+    b.setAttribute('aria-pressed', room.mapChoice === id);
     const n = document.createElement('span');
     n.textContent = t(def ? `map.${id}` : 'room.random');
-    b.append(f, n);
+    b.append(n);
     b.disabled = room.state !== 'lobby';
     b.onclick = () => {
       net.send({ t: 'map', id });
@@ -363,29 +362,36 @@ function renderRoom() {
     const p = room.players[i];
     const card = document.createElement('div');
     card.className = `slot${p ? '' : ' open'}${p?.ready ? ' ready' : ''}${p?.id === net.id ? ' me' : ''}`;
+    const face = document.createElement('div');
+    face.className = 'face';
+    const info = document.createElement('div');
+    info.className = 'who';
+    const nm = document.createElement('strong');
+    const sub = document.createElement('small');
     if (p) {
-      const face = document.createElement('div');
-      face.className = 'face';
       face.append(faceEl(p.skin));
-      const info = document.createElement('div');
-      const nm = document.createElement('strong');
-      nm.textContent = p.name + (p.id === net.id ? t('room.me') : '') + (p.isBot ? ' 🤖' : '');
-      const sub = document.createElement('small');
-      sub.textContent = `${t('room.wins', { n: p.wins })} · ${t(p.ready ? 'room.isReady' : 'room.notReady')}`;
-      info.append(nm, sub);
-      card.append(face, info);
+      nm.textContent = p.name;
+      const tags = [];
+      if (p.id === net.id) tags.push(['you', t('room.youTag')]);
+      if (p.isBot) tags.push(['bot', t('room.botTag')]);
+      if (p.wins) tags.push(['wins', t('room.wins', { n: p.wins })]);
+      for (const [k, txt] of tags) {
+        const tag = document.createElement('i');
+        tag.className = `tag ${k}`;
+        tag.textContent = txt;
+        sub.append(tag);
+      }
+      const stamp = document.createElement('b');
+      stamp.className = 'stamp';
+      stamp.textContent = t(p.ready ? 'room.isReady' : 'room.notReady');
+      card.append(face, info, stamp);
     } else {
-      const face = document.createElement('div');
-      face.className = 'face';
-      face.textContent = '❓';
-      const info = document.createElement('div');
-      const nm = document.createElement('strong');
       nm.textContent = t('room.empty');
-      const sub = document.createElement('small');
       sub.textContent = t('room.emptySub');
-      info.append(nm, sub);
       card.append(face, info);
     }
+    info.prepend(nm);
+    info.append(sub);
     box.append(card);
   }
   const me = room.players.find((p) => p.id === net.id);
@@ -421,11 +427,16 @@ function showSkinDesc() {
   const descBox = $('skinDesc');
   descBox.replaceChildren();
   if (u) {
+    const name = document.createElement('strong');
+    name.textContent = t(`skin.${currentSkin}`);
     const head = document.createElement('b');
     head.textContent = t(`ultra.${currentSkin}`);
+    const key = document.createElement('kbd');
+    key.textContent = 'E';
+    head.prepend(key);
     const body = document.createElement('span');
     body.textContent = t(`ultraDesc.${currentSkin}`);
-    descBox.append(faceEl(currentSkin, 'descFace'), head, body);
+    descBox.append(faceEl(currentSkin, 'descFace'), name, head, body);
   }
 }
 
@@ -515,30 +526,38 @@ function showResult(m) {
 
   const table = $('resultStats');
   table.replaceChildren();
-  for (const p of m.players) {
+  // 순위표: 순위, 얼굴, 이름, 킬 수만 크게. 나머지 기록은 한 줄로
+  // 기권승이면 킬이 적어도 승자를 맨 위에
+  const ranked = [...m.players].sort((a, b) => (b.id === m.winner) - (a.id === m.winner));
+  ranked.forEach((p, i) => {
     const s = p.stats;
     const acc = s.shots ? Math.round((s.hitShots / s.shots) * 100) : 0;
-    const col = document.createElement('div');
-    col.className = `statCol${p.id === m.winner ? ' winner' : ''}`;
-    const head = document.createElement('h3');
-    head.append(faceEl(p.skin, 'statFace'), document.createTextNode(p.name));
-    col.append(head);
-    const rows = [
-      [t('stat.kills'), p.kills], [t('stat.deaths'), s.deaths], [t('stat.acc'), `${acc}%`], [t('stat.heads'), s.headshots],
-      [t('stat.damage'), Math.round(s.damage)], [t('stat.aura'), Math.round(s.auraEarned).toLocaleString()],
-      [t('stat.wins'), t('room.wins', { n: p.wins })],
-    ];
-    for (const [k, v] of rows) {
-      const r = document.createElement('p');
-      const a = document.createElement('span');
-      a.textContent = k;
-      const b = document.createElement('b');
-      b.textContent = v;
-      r.append(a, b);
-      col.append(r);
-    }
-    table.append(col);
-  }
+    const row = document.createElement('div');
+    row.className = `rankRow${p.id === m.winner ? ' winner' : ''}${p.id === net.id ? ' me' : ''}`;
+    const rank = document.createElement('b');
+    rank.className = 'rank';
+    rank.textContent = i + 1;
+    const who = document.createElement('div');
+    who.className = 'who';
+    const nm = document.createElement('strong');
+    nm.textContent = p.name;
+    const line = document.createElement('small');
+    line.textContent = [
+      `${t('stat.deaths')} ${s.deaths}`, `${t('stat.acc')} ${acc}%`, `${t('stat.heads')} ${s.headshots}`,
+      `${t('stat.damage')} ${Math.round(s.damage)}`, `${t('stat.aura')} ${Math.round(s.auraEarned).toLocaleString()}`,
+      t('room.wins', { n: p.wins }),
+    ].join(' · ');
+    who.append(nm, line);
+    const kills = document.createElement('div');
+    kills.className = 'kills';
+    const k = document.createElement('b');
+    k.textContent = p.kills;
+    const kl = document.createElement('small');
+    kl.textContent = t('stat.kills');
+    kills.append(k, kl);
+    row.append(rank, faceEl(p.skin, 'rankFace'), who, kills);
+    table.append(row);
+  });
 
   // 대기실 복귀 카운트다운
   const end = Date.now() + m.resultsMs;
@@ -573,7 +592,11 @@ function showResult(m) {
 let tickerTimer = 0;
 function startTicker() {
   const el = $('ticker');
-  const next = () => { el.textContent = `🚨 ${pick(lines('ticker'))}`; };
+  const next = () => {
+    const tag = document.createElement('b');
+    tag.textContent = t('ticker.tag');
+    el.replaceChildren(tag, document.createTextNode(pick(lines('ticker'))));
+  };
   next();
   clearInterval(tickerTimer);
   tickerTimer = setInterval(next, 6700);

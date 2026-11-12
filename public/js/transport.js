@@ -79,7 +79,12 @@ export async function matchmake(probeMs = 2500) {
         else settle(code);
       });
     }
-    const timer = setTimeout(() => finish(null), probeMs);
+    // 시간이 됐는데 방장이 답장(연결 협상)을 보낸 번호가 있으면 연결이 느린 것뿐이니 조금 더 기다린다
+    const answering = () => [...conns].some(([code, c]) => !settled.has(code) && c.peerConnection?.remoteDescription);
+    let timer = setTimeout(function check(extra) {
+      if (!extra && answering()) timer = setTimeout(() => check(true), 3500);
+      else finish(null);
+    }, probeMs);
   });
 }
 

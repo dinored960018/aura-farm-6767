@@ -11,7 +11,7 @@ export function makePortraits() {
   let r = null;
   try {
     r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-    r.setSize(160, 160);
+    r.setSize(200, 200);
     r.toneMapping = THREE.NeutralToneMapping;
     const scene = new THREE.Scene();
     scene.add(new THREE.HemisphereLight(0xffffff, 0x665577, 2.2));

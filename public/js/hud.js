@@ -51,7 +51,7 @@ export class Hud {
   setLockHint(v) { this.el.lock.hidden = !v; }
 
   setWeapon(w) {
-    this.el.weapon.textContent = `${w.emoji} ${t(`weapon.${w.id}`)}`;
+    this.el.weapon.textContent = t(`weapon.${w.id}`);
     this.restart(this.el.weapon, 'wobble');
   }
 

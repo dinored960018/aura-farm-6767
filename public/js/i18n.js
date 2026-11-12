@@ -21,11 +21,16 @@ const en = {
   'room.leave': 'Leave',
   'room.renamePh': 'Nickname',
   'room.rename': 'Rename',
-  'room.ready': 'Ready 🗿',
-  'room.play': 'PLAY NOW 🗿',
+  'room.ready': 'Ready',
+  'room.play': 'PLAY NOW',
   'room.unready': 'Cancel ready',
   'room.waiting': 'Ready (waiting for players)',
-  'room.invite': '🔗 Invite',
+  'room.invite': 'Invite',
+  'room.botTag': 'BOT',
+  'room.youTag': 'YOU',
+  'room.addBot': 'Add bot',
+  'room.removeBot': 'Remove bot',
+  'ticker.tag': 'BREAKING',
   'room.inviteTitle': 'Copy invite link',
   'room.map': 'Map',
   'room.character': 'Your character',
@@ -176,11 +181,16 @@ const ko = {
   'room.leave': '나가기',
   'room.renamePh': '닉네임',
   'room.rename': '닉변',
-  'room.ready': '준비 완료 🗿',
-  'room.play': '바로 시작 🗿',
+  'room.ready': '준비 완료',
+  'room.play': '바로 시작',
   'room.unready': '준비 취소',
   'room.waiting': '준비 (상대 기다리는 중)',
-  'room.invite': '🔗 초대',
+  'room.invite': '초대',
+  'room.botTag': '봇',
+  'room.youTag': '나',
+  'room.addBot': '봇 추가',
+  'room.removeBot': '봇 빼기',
+  'ticker.tag': '속보',
   'room.inviteTitle': '초대 링크 복사',
   'room.map': '맵',
   'room.character': '내 캐릭터',
@@ -364,5 +374,8 @@ export function applyStatic(root = document) {
   for (const el of root.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
   for (const el of root.querySelectorAll('[data-i18n-html]')) el.innerHTML = t(el.dataset.i18nHtml); // 위 사전의 내용만 넣는다
   for (const el of root.querySelectorAll('[data-i18n-ph]')) el.placeholder = t(el.dataset.i18nPh);
-  for (const el of root.querySelectorAll('[data-i18n-title]')) el.title = t(el.dataset.i18nTitle);
+  for (const el of root.querySelectorAll('[data-i18n-title]')) {
+    el.title = t(el.dataset.i18nTitle);
+    if (el.hasAttribute('aria-label')) el.setAttribute('aria-label', el.title);
+  }
 }
