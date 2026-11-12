@@ -6,6 +6,7 @@ export class Player {
     this.id = id;
     this.name = name;
     this.skin = skin;
+    this.look = {};
     this.isBot = false;
     this.room = null;
     this.ready = false;

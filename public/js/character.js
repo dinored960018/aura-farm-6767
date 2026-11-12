@@ -143,6 +143,18 @@ function nameSprite(text) {
 }
 
 let woodTex = null;
+function stripeTexture(a, b) {
+  const cv = document.createElement('canvas');
+  cv.width = 64; cv.height = 64;
+  const x = cv.getContext('2d');
+  x.fillStyle = a; x.fillRect(0, 0, 64, 64);
+  x.fillStyle = b;
+  for (let i = 0; i < 4; i++) x.fillRect(0, i * 16, 64, 8);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 function woodTexture() {
   if (woodTex) return woodTex;
   const c = document.createElement('canvas');
@@ -206,13 +218,106 @@ export class Character {
   static fx = null;
   static cam = null;
 
-  constructor(skinId, name) {
+  // 상점 꾸미기. 머리 위(모자)와 얼굴 앞(얼굴)에 붙인다
+  addLook(look) {
+    const top = { cone: 1.02, toilet: 0.62, tung: 0.6, cat: 0.5 }[this.skinId] ?? 0.52;
+    const hat = new THREE.Group();
+    hat.position.y = top;
+    switch (look.hat) {
+      case 'party': {
+        const tex = stripeTexture('#ff2a7a', '#ffd21f');
+        hat.add(mesh(new THREE.ConeGeometry(0.24, 0.62, 18), toon(0xffffff, { map: tex }), 0, 0.3, 0));
+        hat.add(mesh(new THREE.SphereGeometry(0.08, 10, 8), toon(0x19e3e8), 0, 0.64, 0));
+        hat.rotation.z = -0.18;
+        break;
+      }
+      case 'bucket': {
+        const m = toon(0x7d9a4a);
+        hat.add(mesh(new THREE.CylinderGeometry(0.4, 0.46, 0.26, 20), m, 0, 0.07, 0));
+        hat.add(mesh(new THREE.CylinderGeometry(0.66, 0.7, 0.04, 22), m, 0, -0.06, 0));
+        hat.position.y -= 0.08;
+        break;
+      }
+      case 'tophat': {
+        const m = toon(0x16131c);
+        hat.add(mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.56, 20), m, 0, 0.26, 0));
+        hat.add(mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.04, 22), m, 0, 0, 0));
+        hat.add(mesh(new THREE.CylinderGeometry(0.305, 0.305, 0.1, 20), toon(0xff2a7a), 0, 0.08, 0));
+        hat.rotation.z = 0.12;
+        break;
+      }
+      case 'propeller': {
+        const cols = [0xff2a7a, 0xffd21f, 0x2f6df6, 0x4dff6a];
+        for (let i = 0; i < 4; i++) {
+          hat.add(mesh(new THREE.SphereGeometry(0.43, 16, 8, (i * Math.PI) / 2, Math.PI / 2, 0, Math.PI / 2), toon(cols[i]), 0, -0.13, 0));
+        }
+        hat.add(mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.16, 6), toon(0x333333), 0, 0.36, 0));
+        const prop = new THREE.Group();
+        prop.position.y = 0.45;
+        for (const s of [-1, 1]) prop.add(mesh(new THREE.BoxGeometry(0.5, 0.02, 0.1), toon(0xff2d2d), s * 0.25, 0, 0));
+        hat.add(prop);
+        this.propeller = prop;
+        break;
+      }
+      case 'horns': {
+        const m = toon(0xd8202c);
+        for (const s of [-1, 1]) {
+          const h = mesh(new THREE.ConeGeometry(0.09, 0.34, 10), m, s * 0.26, 0.04, -0.06);
+          h.rotation.z = -s * 0.45;
+          hat.add(h);
+        }
+        break;
+      }
+      case 'halo': {
+        hat.add(skipOutline(mesh(new THREE.TorusGeometry(0.3, 0.045, 8, 28).rotateX(Math.PI / 2), hdr(0xffe36b, 2.2), 0, 0.3, 0)));
+        this.haloRing = hat;
+        break;
+      }
+      default: break;
+    }
+    if (hat.children.length) { this.head.add(hat); this.hat = hat; }
+    const face = new THREE.Group();
+    switch (look.face) {
+      case 'stache': {
+        const m = toon(0x2a1608);
+        for (const s of [-1, 1]) {
+          const half = mesh(new THREE.CapsuleGeometry(0.06, 0.2, 4, 8), m, s * 0.13, -0.15, -0.5);
+          half.rotation.z = Math.PI / 2 + s * 0.35;
+          face.add(half);
+        }
+        break;
+      }
+      case 'clown':
+        face.add(mesh(new THREE.SphereGeometry(0.12, 14, 10), toon(0xff2020), 0, -0.04, -0.58));
+        break;
+      case 'monocle': {
+        face.add(skipOutline(mesh(new THREE.TorusGeometry(0.21, 0.03, 8, 24), hdr(0xffc800, 1.3), 0.2, 0.13, -0.78)));
+        face.add(skipOutline(mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.5, 4), hdr(0xffc800, 1.3), 0.4, -0.14, -0.74)));
+        break;
+      }
+      case 'bandage': {
+        const m = toon(0xf2c79a);
+        const a = mesh(new THREE.BoxGeometry(0.26, 0.08, 0.02), m, -0.2, 0.4, -0.45);
+        a.rotation.set(-0.3, 0, 0.6);
+        const b = mesh(new THREE.BoxGeometry(0.26, 0.08, 0.02), m, -0.2, 0.4, -0.45);
+        b.rotation.set(-0.3, 0, -0.6);
+        face.add(a, b);
+        break;
+      }
+      default: break;
+    }
+    if (face.children.length) this.head.add(face);
+  }
+
+  constructor(skinId, name, look = {}) {
     this.skinId = skinId;
     this.nameText = name;
+    this.look = look ?? {};
     this.root = new THREE.Group();
     this.visual = new THREE.Group();
     this.root.add(this.visual);
     this.build(skinId);
+    this.addLook(this.look);
     if (name) {
       this.tag = nameSprite(name);
       this.tag.position.y = 2.65;
@@ -906,6 +1011,8 @@ export class Character {
 
   update(dt) {
     this.time += dt;
+    if (this.propeller) this.propeller.rotation.y += dt * 14;
+    if (this.hat) this.hat.visible = !this.crown.visible;
     const t = this.time;
 
     const pos = this.root.position;

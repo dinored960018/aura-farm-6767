@@ -1,5 +1,6 @@
 // 3D 세계와 1인칭 조작. 서버 메시지를 받아 눈깔을 튀어나오게 한다.
 import * as THREE from 'three';
+import { lookKey } from '../shared/cosmetics.js';
 import {
   SKINS, WEAPONS, LASER, CHILL, MOVE, PLAYER, SLAP, BOMB, AURA_MAX, INTERP_MS, MATCH_SECONDS, TICK_HZ,
 } from '../shared/constants.js';
@@ -653,11 +654,11 @@ export class Game {
     for (const p of players) wanted.set(p.id, p);
     for (const [id, c] of this.chars) {
       const w = wanted.get(id);
-      if (!w || c.skinId !== w.skin || c.nameText !== w.name) { c.dispose(this.scene); this.chars.delete(id); }
+      if (!w || c.skinId !== w.skin || c.nameText !== w.name || lookKey(c.look) !== lookKey(w.look)) { c.dispose(this.scene); this.chars.delete(id); }
     }
     for (const p of players) {
       if (!this.chars.has(p.id)) {
-        const c = new Character(p.skin, p.name);
+        const c = new Character(p.skin, p.name, p.look);
         this.scene.add(c.root);
         this.chars.set(p.id, c);
       }

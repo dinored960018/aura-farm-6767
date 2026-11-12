@@ -6,7 +6,8 @@ import { Hud } from './hud.js';
 import { Game } from './game.js';
 import { P2P, inviteCode, inviteUrl, openTransport, setInviteCode, matchmake, isPublicHost } from './transport.js';
 import { lines, pick } from './memes.js';
-import { makePortraits, faceEl } from './portraits.js';
+import { makePortraits, faceEl, lookShot, closeShopRenderer } from './portraits.js';
+import { COSMETICS } from '../shared/cosmetics.js';
 import { t, getLang, setLang, suggestLang, applyStatic } from './i18n.js';
 import { portal } from './portal.js';
 import { createProfile, xpNeed } from './profile.js';
@@ -78,7 +79,7 @@ function connect() {
 }
 
 function sendHello() {
-  net.send({ t: 'hello', name: $('nameInput').value.trim() || t('home.nickPh'), skin: currentSkin });
+  net.send({ t: 'hello', name: $('nameInput').value.trim() || t('home.nickPh'), skin: currentSkin, look: profile.data.equip });
 }
 
 const H = net.handlers;
@@ -433,7 +434,9 @@ function renderRoom() {
 function renderProfile() {
   const d = profile.data;
   const bar = $('profileBar');
-  bar.innerHTML = `<b class="lv"></b><span class="xp"><i></i></span><span class="coins">${COIN}<b></b></span>`;
+  bar.innerHTML = `<b class="lv"></b><span class="xp"><i></i></span><button type="button" class="shopBtn"><span class="coins">${COIN}<b></b></span><span class="lbl"></span></button>`;
+  bar.querySelector('.lbl').textContent = t('shop.open');
+  bar.querySelector('.shopBtn').onclick = openShop;
   bar.querySelector('.lv').textContent = t('prof.level', { n: d.level });
   bar.querySelector('.xp i').style.width = `${Math.min(100, (d.xp / xpNeed(d.level)) * 100)}%`;
   bar.querySelector('.coins b').textContent = d.coins.toLocaleString();
@@ -631,6 +634,74 @@ function showResult(m) {
   } else if (!draw) {
     sfx.sadTrombone();
     sfx.say(pick(['bruh', 'you are the N P C', 'skill issue']), { pitch: 0.3, lang: 'en-US' });
+  }
+}
+
+// ---------- 상점 ----------
+let shopTab = 'hat';
+function openShop() {
+  if (!room || room.state !== 'lobby') return;
+  sfx.click();
+  $('shop').hidden = false;
+  renderShop();
+}
+function closeShop() {
+  $('shop').hidden = true;
+  closeShopRenderer();
+  renderProfile();
+}
+$('shopClose').onclick = closeShop;
+$('shop').addEventListener('pointerdown', (e) => { if (e.target === $('shop')) closeShop(); });
+for (const b of document.querySelectorAll('#shopTabs button')) {
+  b.onclick = () => { shopTab = b.dataset.tab; renderShop(); sfx.click(); };
+}
+function renderShop() {
+  const d = profile.data;
+  $('shopCoins').innerHTML = COIN;
+  $('shopCoins').append(d.coins.toLocaleString());
+  for (const b of document.querySelectorAll('#shopTabs button')) b.setAttribute('aria-selected', b.dataset.tab === shopTab);
+  const grid = $('shopGrid');
+  grid.replaceChildren();
+  for (const [id, item] of Object.entries(COSMETICS)) {
+    if (item.slot !== shopTab) continue;
+    const owned = profile.owns(id);
+    const on = d.equip[item.slot] === id;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `item${owned ? ' owned' : ''}${on ? ' on' : ''}${!owned && d.coins < item.price ? ' poor' : ''}`;
+    const url = lookShot(currentSkin, { ...d.equip, [item.slot]: id });
+    if (url) {
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = '';
+      b.append(img);
+    }
+    const name = document.createElement('strong');
+    name.textContent = t(`item.${id}`);
+    const price = document.createElement('span');
+    price.className = 'price';
+    if (on) price.textContent = t('shop.equipped');
+    else if (owned) price.textContent = t('shop.owned');
+    else { price.innerHTML = COIN; price.append(String(item.price)); }
+    b.append(name, price);
+    b.onclick = () => {
+      if (!owned) {
+        if (!profile.buy(id, item.price)) {
+          toast(t('shop.need', { n: item.price - profile.data.coins }));
+          sfx.click();
+          return;
+        }
+        toast(t('shop.bought', { name: t(`item.${id}`) }));
+        sfx.airhorn();
+        profile.equip(item.slot, id);
+      } else {
+        profile.equip(item.slot, on ? null : id);
+        sfx.quack();
+      }
+      net.send({ t: 'look', look: profile.data.equip });
+      renderShop();
+    };
+    grid.append(b);
   }
 }
 

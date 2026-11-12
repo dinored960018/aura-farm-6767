@@ -3,6 +3,7 @@ import { Room, TICK_MS } from './room.js';
 import { Player } from './player.js';
 import { SKIN_IDS, TICK_HZ } from '../shared/constants.js';
 import { cleanText } from '../shared/filter.js';
+import { cleanLook } from '../shared/cosmetics.js';
 
 class HumanPlayer extends Player {
   constructor(id, name, skin, rawSend) {
@@ -51,6 +52,13 @@ export function createHub({ timings = {}, autoTick = true } = {}) {
       case 'hello':
         p.name = cleanName(m.name, p.name);
         if (SKIN_IDS.includes(m.skin)) p.skin = m.skin;
+        p.look = cleanLook(m.look);
+        break;
+      case 'look':
+        // 꾸미기는 대기실에서만 바뀐다 (경기 중 캐릭터를 다시 만들지 않게)
+        if (r && r.state !== 'lobby') break;
+        p.look = cleanLook(m.look);
+        if (r) r.sendRoom();
         break;
       case 'rename': {
         const name = cleanName(m.name, p.name);

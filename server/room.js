@@ -60,7 +60,7 @@ export class Room {
         open: this.joinable(), public: this.public,
         autoStartIn: this.autoStartAt ? Math.max(0, this.autoStartAt - Date.now()) : 0,
         players: this.players.map((p) => ({
-          id: p.id, name: p.name, skin: p.skin, ready: p.ready, wins: p.wins, isBot: p.isBot,
+          id: p.id, name: p.name, skin: p.skin, ready: p.ready, wins: p.wins, isBot: p.isBot, look: p.look,
         })),
       },
     };
@@ -107,7 +107,7 @@ export class Room {
         map: this.map.id,
         countdownMs: this.state === 'countdown' ? Math.max(0, this.stateUntil - now) : 0,
         endsIn: this.matchEndsAt - now,
-        players: this.players.map((q) => ({ id: q.id, name: q.name, skin: q.skin, pos: q.pos, yaw: q.yaw, isBot: q.isBot })),
+        players: this.players.map((q) => ({ id: q.id, name: q.name, skin: q.skin, pos: q.pos, yaw: q.yaw, isBot: q.isBot, look: q.look })),
         pickups: this.pickups.map((q) => q.active),
         dropIn: true,
       });
@@ -268,7 +268,7 @@ export class Room {
       map: this.map.id,
       countdownMs: this.t.countdownMs,
       endsIn: this.matchEndsAt - now,
-      players: this.players.map((p) => ({ id: p.id, name: p.name, skin: p.skin, pos: p.pos, yaw: p.yaw, isBot: p.isBot })),
+      players: this.players.map((p) => ({ id: p.id, name: p.name, skin: p.skin, pos: p.pos, yaw: p.yaw, isBot: p.isBot, look: p.look })),
       pickups: this.pickups.map((p) => p.active),
     });
     this.sendRoom();

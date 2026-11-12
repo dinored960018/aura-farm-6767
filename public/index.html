@@ -165,6 +165,16 @@
   </div>
 </section>
 
+<!-- 상점 -->
+<section id="shop" class="panelScreen" hidden>
+  <div class="card shopCard" role="dialog" aria-labelledby="shopTitle">
+    <div class="titleRow"><h2 id="shopTitle" data-i18n="shop.title"></h2><span class="coins" id="shopCoins"></span><button id="shopClose" class="iconBtn" data-i18n-title="shop.close" aria-label="Close"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div id="shopTabs" role="tablist"><button type="button" data-tab="hat" data-i18n="shop.hat"></button><button type="button" data-tab="face" data-i18n="shop.face"></button></div>
+    <div id="shopGrid"></div>
+    <p class="shopNote" data-i18n="shop.note"></p>
+  </div>
+</section>
+
 <div id="toast" hidden></div>
 <div id="adBlock" hidden></div>
 <script type="module" src="js/main.js"></script>

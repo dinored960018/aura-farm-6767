@@ -166,6 +166,25 @@ test('공개 방: 둘이 모이면 알아서 시작하고, 경기 중에도 봇 
   a.ws.close();
 });
 
+test('꾸미기: 모르는 물건은 버리고, 대기실에서 바꾸면 모두에게 보이며 경기 중엔 안 바뀐다', async () => {
+  const a = await new C().open('A');
+  a.send({ t: 'hello', name: 'A', skin: 'cat', look: { hat: 'halo', face: 'nope', evil: 'x' } });
+  a.send({ t: 'create', name: 'look' });
+  await a.wait((m) => m.t === 'room');
+  assert.deepEqual(a.room.players[0].look, { hat: 'halo' });
+  a.send({ t: 'look', look: { hat: 'stache', face: 'stache' } });
+  await a.wait((m) => m.t === 'room' && m.room.players[0].look.face === 'stache');
+  assert.equal(a.room.players[0].look.hat, undefined, '모자 칸에 얼굴 물건은 못 씀');
+  a.send({ t: 'addBot' });
+  const ms = a.wait((m) => m.t === 'matchStart');
+  a.send({ t: 'ready', ready: true });
+  assert.deepEqual((await ms).players.find((p) => p.id === a.id).look, { face: 'stache' });
+  a.send({ t: 'look', look: { hat: 'tophat' } });
+  await sleep(150);
+  assert.deepEqual(a.room.players[0].look, { face: 'stache' });
+  a.ws.close();
+});
+
 test('비공개 방은 경기 중에 못 들어온다', async () => {
   const a = await new C().open('A');
   a.send({ t: 'create', name: 'priv' });
