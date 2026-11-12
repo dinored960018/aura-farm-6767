@@ -6,6 +6,9 @@ export const WIN_KILLS = 7;
 export const MATCH_SECONDS = 367; // 6분 7초
 export const AURA_MAX = 6767;
 export const MAX_PLAYERS = 4;
+// 경기 방식. rush: 아우라 3배, 반쯤 찬 채로 시작
+export const MODES = { classic: {}, rush: { auraMul: 3, auraStart: 0.45 } };
+export const MODE_IDS = Object.keys(MODES);
 export const INTERP_MS = 100;
 
 export const PLAYER = { radius: 0.45, height: 1.8, eye: 1.55 };

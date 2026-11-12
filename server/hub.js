@@ -91,6 +91,7 @@ export function createHub({ timings = {}, autoTick = true } = {}) {
         else if (SKIN_IDS.includes(m.skin)) p.skin = m.skin;
         break;
       case 'map': r?.setMap(p, m.id); break;
+      case 'mode': r?.setMode(p, m.id); break;
       case 'chat': r?.chat(p, m.text); break;
       case 'addBot': r?.addBot(); break;
       case 'removeBot': r?.removeBot(); break;

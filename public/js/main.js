@@ -162,7 +162,7 @@ H.pong = (m) => {
 H.rooms = (m) => renderRooms(m.rooms);
 H.sys = (m) => addChat(t('system'), t(m.key, m.mapId
   ? { ...m.vars, map: t(m.mapId === 'random' ? 'room.random' : `map.${m.mapId}`) }
-  : m.vars));
+  : m.modeId ? { ...m.vars, mode: t(`mode.${m.modeId}`) } : m.vars));
 H.error = (m) => {
   if (portal.active && net.ws?.isGuest) { leaveToHome(t(m.key)); return; }
   toast(t(m.key));
@@ -370,6 +370,24 @@ function renderMaps(box) {
   }
 }
 
+function renderModes(box) {
+  box.replaceChildren();
+  for (const id of ['classic', 'rush']) {
+    const b = document.createElement('button');
+    b.className = `modeBtn${room.mode === id ? ' on' : ''}`;
+    b.dataset.mode = id;
+    b.setAttribute('aria-pressed', room.mode === id);
+    b.disabled = room.state !== 'lobby';
+    const n = document.createElement('strong');
+    n.textContent = t(`mode.${id}`);
+    const d = document.createElement('small');
+    d.textContent = t(`modeDesc.${id}`);
+    b.append(n, d);
+    b.onclick = () => { net.send({ t: 'mode', id }); sfx.click(); };
+    box.append(b);
+  }
+}
+
 function renderRoom() {
   if (!room) return;
   $('roomTitle').textContent = room.name || t('room.title');
@@ -424,6 +442,7 @@ function renderRoom() {
   rb.disabled = room.state !== 'lobby';
   $('botBtn').disabled = room.state !== 'lobby' || room.players.length >= MAX_PLAYERS;
   $('botOutBtn').disabled = room.state !== 'lobby' || !room.players.some((p) => p.isBot);
+  renderModes($('modePick'));
   renderMaps($('mapPick'));
   renderSkins($('skinPick'));
   showSkinDesc();

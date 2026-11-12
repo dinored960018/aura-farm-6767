@@ -185,6 +185,26 @@ test('꾸미기: 모르는 물건은 버리고, 대기실에서 바꾸면 모두
   a.ws.close();
 });
 
+test('각성 난장판: 아우라가 반쯤 찬 채로 시작하고 3배로 쌓인다', async () => {
+  const a = await new C().open('A');
+  a.send({ t: 'create', name: 'rush' });
+  await a.wait((m) => m.t === 'room');
+  a.send({ t: 'mode', id: 'rush' });
+  await a.wait((m) => m.t === 'room' && m.room.mode === 'rush');
+  a.send({ t: 'mode', id: 'nope' });
+  a.send({ t: 'addBot' });
+  const go = a.wait((m) => m.t === 'go');
+  a.send({ t: 'ready', ready: true });
+  await go;
+  const snap = await a.wait((m) => m.t === 'snap');
+  const me = snap.players.find((p) => p.id === a.id);
+  assert.ok(me.aura >= 3000 && me.aura < 3200, '시작 아우라 ' + me.aura);
+  const gain = a.wait((m) => m.t === 'aura' && m.id === a.id && m.reason === 'sixSeven');
+  a.send({ t: 'state', p: me.p, y: 0, pi: 0, w: 'fart', e: 2 });
+  assert.equal((await gain).delta, 67 * 3);
+  a.ws.close();
+});
+
 test('비공개 방은 경기 중에 못 들어온다', async () => {
   const a = await new C().open('A');
   a.send({ t: 'create', name: 'priv' });

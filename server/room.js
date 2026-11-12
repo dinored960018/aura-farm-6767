@@ -1,5 +1,6 @@
 // 방 하나 = 대기실 + 경기 1판 (개인전, 2~4명). 서버가 체력·킬·아우라·판정을 전부 결정한다.
 import {
+  MODES,
   TICK_HZ, MAX_HP, WIN_KILLS, MATCH_SECONDS, AURA_MAX, INTERP_MS, MAX_PLAYERS,
   WEAPONS, LASER, SLAP, AURA, CHICKEN_HEAL, BOMB, NUKE, FALLOUT, SIGMA, CAT, FLUSH, BARK, HERO, CHILL, TUNG, RIZZ, ULTRAS, EVENTS, EVENT_IDS, PLAYER, DEFAULT_TIMINGS, SKIN_IDS,
 } from '../shared/constants.js';
@@ -33,6 +34,7 @@ export class Room {
     this.event = null;
     this.nextEventAt = 0;
     // 공개 방: 모르는 사람이 경기 중에도 봇 자리로 들어오고, 경기가 끝나면 알아서 다음 판이 시작된다
+    this.mode = 'classic';
     this.public = false;
     this.autoStartAt = 0;
     this.played = 0;
@@ -57,7 +59,7 @@ export class Room {
       t: 'room',
       room: {
         id: this.id, name: this.name, state: this.state, mapChoice: this.mapChoice, mapId: this.map.id,
-        open: this.joinable(), public: this.public,
+        open: this.joinable(), public: this.public, mode: this.mode,
         autoStartIn: this.autoStartAt ? Math.max(0, this.autoStartAt - Date.now()) : 0,
         players: this.players.map((p) => ({
           id: p.id, name: p.name, skin: p.skin, ready: p.ready, wins: p.wins, isBot: p.isBot, look: p.look,
@@ -98,6 +100,7 @@ export class Room {
   // 경기 중에 들어온 사람이나 봇을 바로 경기에 넣는다
   dropIn(p) {
     p.resetForMatch();
+    p.aura = Math.round(AURA_MAX * (MODES[this.mode].auraStart ?? 0));
     p.ready = true;
     this.placeAtSpawn(p, this.players.filter((q) => q !== p && q.alive).map((q) => q.pos));
     if (!p.isBot) {
@@ -221,6 +224,13 @@ export class Room {
     }
   }
 
+  setMode(player, id) {
+    if (this.state !== 'lobby' || !MODES[id] || this.mode === id) return;
+    this.mode = id;
+    this.broadcast({ t: 'sys', key: 'sys.mode', vars: { name: player.name }, modeId: id });
+    this.sendRoom();
+  }
+
   rename(player, name) {
     name = this.uniqueName(name, player);
     if (this.state !== 'lobby' || player.name === name) return;
@@ -258,8 +268,10 @@ export class Room {
     this.pickups = this.map.pickups.map((p) => ({ ...p, active: true, respawnAt: 0 }));
 
     const taken = [];
+    const startAura = Math.round(AURA_MAX * (MODES[this.mode].auraStart ?? 0));
     for (const p of this.players) {
       p.resetForMatch();
+      p.aura = startAura;
       this.placeAtSpawn(p, taken);
       taken.push(p.pos);
     }
@@ -935,6 +947,7 @@ export class Room {
   }
 
   addAura(p, delta, reason) {
+    if (delta > 0) delta *= MODES[this.mode].auraMul ?? 1;
     const before = p.aura;
     p.aura = Math.max(0, Math.min(AURA_MAX, p.aura + delta));
     p.stats.auraEarned += Math.max(0, p.aura - before);
