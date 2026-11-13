@@ -14,6 +14,7 @@
 <!-- 경기 화면 -->
 <div id="hud" hidden>
   <div id="vignette"></div>
+<div id="scope" aria-hidden="true"><i></i></div>
   <div id="ultraFrame" hidden><span id="ultraLabel">SIGMA MODE</span><div id="ultraTimeBox"><div id="ultraTime"></div></div></div>
   <div id="claws"></div>
   <div id="grabFace" hidden>😼</div>
@@ -29,10 +30,11 @@
   </div>
   <div id="hudGameLayer">
     <div id="scoreBox">
-      <div id="timerBox"><small data-i18n="hud.first7"></small><i id="timer">6:07</i></div>
+      <div id="timerBox"><small data-i18n="hud.dm"></small><i id="timer">6:07</i></div>
       <div id="scoreChips"></div>
     </div>
     <div id="killfeed"></div>
+<div id="board" hidden><div class="bHead"><span data-i18n="board.title"></span><b>K</b><b>D</b></div><ol></ol></div>
     <div id="eventBanner" hidden></div>
 
     <div id="crosshair"><i></i><i></i><i></i><i></i></div>
@@ -158,6 +160,8 @@
   <div class="card side right">
     <div id="skinDesc"></div>
     <div id="skinPick"></div>
+    <h3 data-i18n="room.loadout"></h3>
+    <div id="loadoutPick"></div>
     <h3 data-i18n="room.daily"></h3>
     <div id="missions"></div>
     <h3 data-i18n="room.mode"></h3>

@@ -46,7 +46,7 @@ function aimAt(from, to) {
   return { o, d: v };
 }
 
-test('대기실 → 경기 → 7킬 → 결과 → 대기실 복귀 → 재경기', async () => {
+test('대기실 → 경기 → 5분 데스매치 → 결과 → 대기실 복귀 → 재경기', async () => {
   const a = await new C().open('민수');
   const b = await new C().open('철수');
   a.send({ t: 'create', name: '테스트방' });
@@ -69,7 +69,10 @@ test('대기실 → 경기 → 7킬 → 결과 → 대기실 복귀 → 재경�
     const backP = a.wait((m) => m.t === 'backToLobby', 15000);
     let done = false;
     end.then(() => { done = true; });
+    // 데스매치: 7킬을 채운 뒤 시간을 끝낸다
+    const room = srv.rooms.get(roomId);
     while (!done) {
+      if (room.players.find((p) => p.id === a.id)?.kills >= 7) { room.matchEndsAt = Date.now(); await sleep(60); continue; }
       a.send({ t: 'state', p: ap, y: 0, pi: 0, w: 'six7', e: 0 });
       b.send({ t: 'state', p: bp, y: 0, pi: 0, w: 'six7', e: 0 });
       await sleep(30);
@@ -134,8 +137,8 @@ test('공개 방: 둘이 모이면 알아서 시작하고, 경기 중에도 봇 
   const a = await new C().open('A');
   a.send({ t: 'create', name: 'pub', public: true });
   await a.wait((m) => m.t === 'room');
-  for (let i = 0; i < 3; i++) a.send({ t: 'addBot' });
-  await a.wait((m) => m.t === 'room' && m.room.players.length === 4);
+  for (let i = 1; i < MAX_PLAYERS; i++) a.send({ t: 'addBot' });
+  await a.wait((m) => m.t === 'room' && m.room.players.length === MAX_PLAYERS);
   assert.equal(a.room.public, true);
   assert.equal(a.room.open, true);
 
@@ -156,13 +159,13 @@ test('공개 방: 둘이 모이면 알아서 시작하고, 경기 중에도 봇 
   const m = await ms;
   await go;
   assert.ok(m.players.some((p) => p.id === c.id));
-  await a.wait((x) => x.t === 'room' && x.room.players.length === 4 && x.room.players.filter((p) => p.isBot).length === 1);
+  await a.wait((x) => x.t === 'room' && x.room.players.length === MAX_PLAYERS && x.room.players.filter((p) => p.isBot).length === MAX_PLAYERS - 3);
   await a.wait((x) => x.t === 'snap' && x.players.some((p) => p.id === c.id && p.a));
 
   // 나가면 봇이 자리를 채워 경기가 계속된다
   c.ws.close();
   b.ws.close();
-  await a.wait((x) => x.t === 'room' && x.room.state === 'playing' && x.room.players.length === 4 && x.room.players.filter((p) => p.isBot).length === 3);
+  await a.wait((x) => x.t === 'room' && x.room.state === 'playing' && x.room.players.length === MAX_PLAYERS && x.room.players.filter((p) => p.isBot).length === MAX_PLAYERS - 1);
   a.ws.close();
 });
 
@@ -328,7 +331,7 @@ test('싸대기는 날려버리고, 시그마가 각성하면 데미지가 1.67�
 const roomOf = (c) => srv.rooms.get(c.room.id);
 const playerOf = (c) => roomOf(c).players.find((p) => p.id === c.id);
 
-async function startRoom(n, { skins = [], map } = {}) {
+async function startRoom(n, { skins = [], map, loadouts = [] } = {}) {
   const cs = [];
   for (let k = 0; k < n; k++) cs.push(await new C().open('P' + k));
   cs[0].send({ t: 'create' });
@@ -336,6 +339,7 @@ async function startRoom(n, { skins = [], map } = {}) {
   for (let k = 1; k < n; k++) cs[k].send({ t: 'join', id: cs[0].room.id });
   await cs[0].wait((m) => m.t === 'room' && m.room.players.length === n);
   cs.forEach((c, k) => { if (skins[k]) c.send({ t: 'skin', skin: skins[k] }); });
+  cs.forEach((c, k) => { if (loadouts[k]) c.send({ t: 'loadout', loadout: loadouts[k] }); });
   if (map) cs[0].send({ t: 'map', id: map });
   await sleep(30);
   const go = cs[0].wait((m) => m.t === 'go');
@@ -372,20 +376,20 @@ test('대기실에서 닉변하면 모두에게 보이고, 경기 중에는 안 
   await sleep(50);
 });
 
-test('4명까지 들어오고 5번째는 못 들어오며, 봇도 4명까지만', async () => {
+test('정원(6명)까지 들어오고 그다음은 못 들어오며, 봇도 정원까지만', async () => {
   const cs = [];
   for (let k = 0; k < MAX_PLAYERS + 1; k++) cs.push(await new C().open('P' + k));
   cs[0].send({ t: 'create' });
   await cs[0].wait((m) => m.t === 'room');
   const id = cs[0].room.id;
   for (let k = 1; k < MAX_PLAYERS; k++) cs[k].send({ t: 'join', id });
-  await cs[0].wait((m) => m.t === 'room' && m.room.players.length === 4);
-  const err = cs[4].wait((m) => m.t === 'error');
-  cs[4].send({ t: 'join', id });
+  await cs[0].wait((m) => m.t === 'room' && m.room.players.length === MAX_PLAYERS);
+  const err = cs[MAX_PLAYERS].wait((m) => m.t === 'error');
+  cs[MAX_PLAYERS].send({ t: 'join', id });
   await err;
   cs[0].send({ t: 'addBot' });
   await sleep(40);
-  assert.equal(roomOf(cs[0]).players.length, 4);
+  assert.equal(roomOf(cs[0]).players.length, MAX_PLAYERS);
   cs.forEach((c) => c.ws.close());
   await sleep(50);
 });
@@ -443,7 +447,7 @@ test('맵 선택이 경기에 적용되고 랜덤도 고른다', async () => {
   await two.close();
 });
 
-test('각성: 고양이는 날아가 붙어서 할퀴고, 맞는 쪽 싸대기에 떨어지며 원래 자리로 착지한다', async () => {
+test('각성: 고양이는 총알을 무시하고 덮쳐 할퀴며, 싸대기 맞으면 튕겼다가 다시 덮친다', async () => {
   const { cs: [a, b], close } = await startRoom(2, { skins: ['cat', 'minsu'] });
   const ap = [-22, 0, 12], bp = [-16, 0, 20];
   a.send({ t: 'state', p: ap, y: 0, pi: 0, w: 'fart', e: 0 });
@@ -461,11 +465,18 @@ test('각성: 고양이는 날아가 붙어서 할퀴고, 맞는 쪽 싸대기�
   a.send({ t: 'state', p: [0, 50, 0], y: 0, pi: 0, w: 'fart', e: 0 });
   await sleep(40);
   assert.ok(Math.hypot(playerOf(a).pos[0] - bp[0], playerOf(a).pos[2] - bp[2]) < 2, '상대 얼굴에 붙어 있어야 함');
-  const off = a.wait((m) => m.t === 'ultra' && !m.on);
-  const tele = a.wait((m) => m.t === 'teleport');
+  // 총알은 안 맞는다
+  const hpBefore = playerOf(a).hp;
+  const { o, d } = aimAt(bp, playerOf(a).pos);
+  b.send({ t: 'shoot', w: 'six7', o, dirs: [d] });
+  await sleep(60);
+  assert.equal(playerOf(a).hp, hpBefore, '고양이 각성 중엔 총알 무시');
+  // 싸대기 맞으면 떨어지지만 각성은 계속되고, 잠깐 뒤 다시 덮친다
+  const off = a.wait((m) => m.t === 'cat' && m.to === null && m.slapped);
   b.send({ t: 'slap', d: [0, 0, -1] });
   await off;
-  assert.deepEqual((await tele).pos.map(Math.round), bp, '떨어지면 상대 자리에 착지');
+  assert.equal(playerOf(a).ultraKind, 'cat');
+  await b.wait((m) => m.t === 'cat' && m.to === b.id, 4000);
   await close();
 });
 
@@ -765,4 +776,107 @@ test('각성 특징: 사후르 7번째가 제일 크고, 핵은 방사능을 남
   m.a.send({ t: 'shoot', w: 'laser', o: a.o, dirs: [a.d] });
   assert.ok((await hit).dmg > 0, '벽 건너편도 맞는다');
   await m.close();
+});
+
+test('무기 고르기: 고른 두 자루만 쏠 수 있고, 저격총은 머리 한 방, 드라이아이스는 터지며 느려진다', async () => {
+  const { cs: [a, b], close } = await startRoom(2, { loadouts: [{ p: 'sniper', s: 'dual' }, { p: 'ice', s: 'six7' }] });
+  const ap = [-20, 0, 12], bp = [-20, 0, 18];
+  const pin = () => {
+    a.send({ t: 'state', p: ap, y: 0, pi: 0, w: 'sniper', e: 0 });
+    b.send({ t: 'state', p: bp, y: Math.PI, pi: 0, w: 'ice', e: 0 });
+  };
+  pin();
+  await sleep(60);
+  // 안 고른 방귀총은 무시
+  const n0 = b.msgs.length;
+  const { o, d } = aimAt(ap, bp);
+  a.send({ t: 'shoot', w: 'fart', o, dirs: [d] });
+  await sleep(80);
+  assert.ok(b.msgs.slice(n0).every((m) => m.t !== 'shot'), '고르지 않은 무기는 못 쏜다');
+  // 저격총 머리 → 한 방
+  const kill = b.wait((m) => m.t === 'kill' && m.victim === b.id);
+  const head = [d[0], d[1] + 0.25, d[2]];
+  a.send({ t: 'shoot', w: 'sniper', o, dirs: [head] });
+  const k = await kill;
+  assert.equal(k.weapon, 'sniper');
+  assert.ok(k.head);
+  await b.wait((m) => m.t === 'spawn' && m.id === b.id);
+  pin();
+  await sleep(80);
+  // 드라이아이스: 상대 발밑 근처 벽/바닥에 쏴도 폭발로 맞고 느려진다
+  const slow = a.wait((m) => m.t === 'slow' && m.to === a.id && m.ice);
+  const ice = a.wait((m) => m.t === 'ice');
+  const r = aimAt(bp, ap);
+  b.send({ t: 'shoot', w: 'ice', o: r.o, dirs: [[r.d[0], r.d[1] - 1.4, r.d[2]]] });
+  await ice;
+  await slow;
+  assert.ok(playerOf(a).hp < 100);
+  await close();
+});
+
+test('새 캐릭터: 바나나 껍질 밟으면 날아가고, 페드로는 춤추게 하고, 뮤잉남은 바라보면 깎고, 발레리나는 닿으면 튕긴다', async () => {
+  // 바나나
+  {
+    const { cs: [a, b], close } = await startRoom(2, { skins: ['banana', 'minsu'] });
+    const ap = [-20, 0, 12], bp = [-20, 0, 30];
+    a.send({ t: 'state', p: ap, y: Math.PI, pi: 0, w: 'fart', e: 0 });
+    b.send({ t: 'state', p: bp, y: 0, pi: 0, w: 'fart', e: 0 });
+    await sleep(60);
+    playerOf(a).aura = 6767;
+    const peel = b.wait((m) => m.t === 'peel');
+    a.send({ t: 'ultra' });
+    const pm = await peel;
+    // 껍질 위로 걸어간다
+    const slip = b.wait((m) => m.t === 'slip' && m.to === b.id);
+    b.send({ t: 'state', p: [pm.pos[0], pm.pos[1], pm.pos[2]], y: 0, pi: 0, w: 'fart', e: 0 });
+    await slip;
+    assert.ok(playerOf(b).hp < 100);
+    await close();
+  }
+  // 페드로
+  {
+    const { cs: [a, b], close } = await startRoom(2, { skins: ['pedro', 'minsu'] });
+    a.send({ t: 'state', p: [-20, 0, 12], y: 0, pi: 0, w: 'fart', e: 0 });
+    b.send({ t: 'state', p: [-20, 0, 18], y: 0, pi: 0, w: 'fart', e: 0 });
+    await sleep(60);
+    playerOf(a).aura = 6767;
+    const dance = b.wait((m) => m.t === 'dance' && m.to === b.id);
+    a.send({ t: 'ultra' });
+    await dance;
+    const n0 = a.msgs.length;
+    const { o, d } = aimAt([-20, 0, 18], [-20, 0, 12]);
+    b.send({ t: 'shoot', w: 'fart', o, dirs: [d] });
+    await b.wait((m) => m.t === 'hit' && m.weapon === 'pedro' && m.to === b.id, 2000);
+    assert.ok(a.msgs.slice(n0).every((m) => !(m.t === 'shot' && m.id === b.id)), '춤추는 동안 못 쏜다');
+    await close();
+  }
+  // 뮤잉남
+  {
+    const { cs: [a, b], close } = await startRoom(2, { skins: ['mew', 'minsu'] });
+    // a가 b를 바라본다: 앞은 -z
+    a.send({ t: 'state', p: [-20, 0, 18], y: 0, pi: 0, w: 'fart', e: 0 });
+    b.send({ t: 'state', p: [-20, 0, 12], y: 0, pi: 0, w: 'fart', e: 0 });
+    await sleep(60);
+    playerOf(a).aura = 6767;
+    playerOf(b).aura = 1000;
+    const mog = b.wait((m) => m.t === 'hit' && m.weapon === 'mew' && m.to === b.id, 2000);
+    a.send({ t: 'ultra' });
+    await mog;
+    assert.ok(playerOf(b).aura < 1000, '아우라를 뺏긴다');
+    await close();
+  }
+  // 발레리나
+  {
+    const { cs: [a, b], close } = await startRoom(2, { skins: ['ballerina', 'minsu'] });
+    a.send({ t: 'state', p: [-20, 0, 12], y: 0, pi: 0, w: 'fart', e: 0 });
+    b.send({ t: 'state', p: [-20, 0, 13.5], y: 0, pi: 0, w: 'fart', e: 0 });
+    await sleep(60);
+    playerOf(a).aura = 6767;
+    const knock = b.wait((m) => m.t === 'knock', 2000);
+    const hit = b.wait((m) => m.t === 'hit' && m.weapon === 'spin' && m.to === b.id, 2000);
+    a.send({ t: 'ultra' });
+    await hit;
+    await knock;
+    await close();
+  }
 });

@@ -2,13 +2,14 @@
 import * as THREE from 'three';
 import { lookKey } from '../shared/cosmetics.js';
 import {
-  SKINS, WEAPONS, LASER, CHILL, MOVE, PLAYER, SLAP, BOMB, AURA_MAX, INTERP_MS, MATCH_SECONDS, TICK_HZ,
+  SKINS, WEAPONS, LASER, CHILL, SPIN, MOVE, PLAYER, SLAP, BOMB, AURA_MAX, INTERP_MS, MATCH_SECONDS, TICK_HZ,
 } from '../shared/constants.js';
 import { MAPS, DEFAULT_MAP, rayWorld, rayPlayer } from '../shared/map.js';
 import { newBody, stepBodyFixed } from '../shared/physics.js';
 import { Character, glowTexture, flashTexture, softTexture, toon, setRim, setOutlines } from './character.js';
 import { Effects, textTexture } from './effects.js';
 import { Pipeline } from './render.js';
+import { ViewModel } from './viewmodel.js';
 import { LOOK, decorateWorld, mergeBoxes } from './worldfx.js';
 import { lines, pick } from './memes.js';
 import { t, ttsLang, signLines } from './i18n.js';
@@ -130,6 +131,15 @@ const rise = (fx, p, color, { size = 0.14, r = 0.9, up = 3.2, hdr = 2.3, life = 
   fx.burst([p.x + Math.cos(a) * d, p.y + 0.1 + Math.random() * 1.4, p.z + Math.sin(a) * d], { n: 1, speed: 0.2, up, color, size, life, hdr, drag: 0.8, spread: 0 });
 };
 export const ULTRA_FX = {
+  banana: { color: 0xffd83a, emit: (fx, p) => rise(fx, p, 0xffd83a, { size: 0.14, up: 2 }) },
+  pedro: { color: 0xc59bff, emit: (fx, p, c, t) => { if (Math.random() < 0.6) fx.burst([p.x + Math.sin(t * 9) * 1.2, p.y + 2.2, p.z + Math.cos(t * 9) * 1.2], { n: 1, speed: 0.4, up: 1.5, color: Math.random() < 0.5 ? 0xff5fc0 : 0x60e0ff, size: 0.2, life: 0.6, hdr: 2.2 }); } },
+  mew: { color: 0xfff1a8, emit: (fx, p) => rise(fx, p, 0xfff1a8, { size: 0.1, up: 3 }) },
+  ballerina: { color: 0xff8fc1, emit: (fx, p, c, t) => {
+    for (let i = 0; i < 2; i++) {
+      const a = t * 16 + i * Math.PI;
+      fx.burst([p.x + Math.cos(a) * 1.6, p.y + 1.1, p.z + Math.sin(a) * 1.6], { n: 1, speed: 0.2, color: 0xffc0dc, size: 0.22, size2: 0.05, life: 0.35, hdr: 2 });
+    }
+  } },
   farm: { color: 0xffd21f, emit: (fx, p) => rise(fx, p, 0xffd21f, { size: 0.15 }) },
   sigma: { color: 0xffc800, emit: (fx, p) => { rise(fx, p, 0xffc800); rise(fx, p, 0xffffff, { size: 0.08, up: 5 }); } },
   minsu: { color: 0xff2030, emit: (fx, p, c) => { for (const w of c.eyeWorldPositions()) fx.burst([w.x, w.y, w.z], { n: 1, speed: 0.6, color: 0xff2030, size: 0.32, size2: 0.05, life: 0.2, hdr: 3 }); } },
@@ -202,6 +212,7 @@ export class Game {
     this.mouseDown = false;
     this.zoom = false;
     this.locked = false;
+    this.loadout = { p: 'fart', s: 'six7' }; // 대기실에서 고른 주무기·보조무기
     this.touch = false; // 휴대폰: 마우스 잠금 없이 화면 버튼으로
     this.touchMove = null;
     this.lastFrame = performance.now();
@@ -230,10 +241,11 @@ export class Game {
   }
 
   resetMatchState() {
+    if (this.scene) this.clearPeels();
     this.alive = true;
     this.frozen = true;
     this.me = null;
-    this.weapon = 'fart';
+    this.weapon = this.loadout.p;
     this.ammo = emptyAmmo();
     this.cooldown = 0;
     this.reloadT = 0;
@@ -471,53 +483,8 @@ export class Game {
       return m;
     };
 
-    const fist = (g, x = 0, y = -0.13, z = 0.05) => {
-      add(g, new THREE.SphereGeometry(0.078, 14, 10), skin, x, y, z);
-      for (let i = 0; i < 3; i++) add(g, new THREE.SphereGeometry(0.024, 8, 6), skin, x - 0.055, y + 0.035 - i * 0.034, z - 0.05);
-      add(g, new THREE.CylinderGeometry(0.052, 0.06, 0.3, 10).rotateX(1.2), skin, x + 0.015, y - 0.05, z + 0.15);
-      const arm = add(g, new THREE.CylinderGeometry(0.075, 0.09, 0.75, 12).rotateX(1.2), sleeve, x + 0.05, y - 0.19, z + 0.54);
-      return arm;
-    };
-
-    const fart = new THREE.Group();
-    add(fart, new THREE.CapsuleGeometry(0.075, 0.36, 6, 16).rotateX(Math.PI / 2), L(0x6cc644));
-    add(fart, new THREE.ConeGeometry(0.115, 0.22, 16).rotateX(-Math.PI / 2), L(0x2f7a1a), 0, 0, -0.34);
-    for (const z of [-0.14, 0.02, 0.15]) add(fart, new THREE.TorusGeometry(0.078, 0.008, 6, 20), L(0x2c4a18), 0, 0, z);
-    // 빛나는 가스관
-    this.vmGas = add(fart, new THREE.CapsuleGeometry(0.021, 0.27, 4, 10).rotateX(Math.PI / 2), H(1.4, 3, 0.35), 0.074, 0.044, 0);
-    add(fart, new THREE.SphereGeometry(0.04, 12, 10), L(0xff66b2), 0, 0.092, -0.08).scale.set(1.2, 0.65, 1.4); // 방귀 방석
-    add(fart, new THREE.CylinderGeometry(0.006, 0.01, 0.035, 8), L(0xd83a8a), 0, 0.112, -0.03).rotation.x = 1.1;
-    add(fart, new THREE.BoxGeometry(0.08, 0.17, 0.07), L(0x222222), 0, -0.13, 0.07);
-    fist(fart);
-
-    const six7 = new THREE.Group();
-    add(six7, new THREE.BoxGeometry(0.11, 0.13, 0.22), L(0xffd23f));
-    add(six7, new THREE.CylinderGeometry(0.052, 0.052, 0.54, 12).rotateX(Math.PI / 2), L(0xb8930a), 0, 0.03, -0.36);
-    add(six7, new THREE.CylinderGeometry(0.085, 0.085, 0.13, 10).rotateX(Math.PI / 2), L(0x777777), 0, 0.01, -0.09);
-    add(six7, new THREE.BoxGeometry(0.075, 0.18, 0.08), L(0x5b3210), 0, -0.13, 0.08);
-    add(six7, new THREE.BoxGeometry(0.018, 0.035, 0.018), H(3.2, 0.3, 1.2), 0, 0.105, -0.6);
-    add(six7, new THREE.BoxGeometry(0.03, 0.03, 0.07), L(0x222222), 0, 0.085, 0.06);
-    for (const z of [-0.2, -0.5]) add(six7, new THREE.TorusGeometry(0.054, 0.007, 6, 16), L(0x7a6108), 0, 0.03, z);
-    const tag = textTexture('67', { color: '#ff0080', stroke: '#fff', size: 96 });
-    const label = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.1), new THREE.MeshBasicMaterial({ map: tag, transparent: true, side: THREE.DoubleSide }));
-    label.position.set(-0.058, 0.03, -0.05);
-    label.rotation.y = -Math.PI / 2;
-    six7.add(label);
-    fist(six7);
-
-    const boom = new THREE.Group();
-    add(boom, new THREE.BoxGeometry(0.12, 0.12, 0.42), L(0x333340));
-    add(boom, new THREE.ConeGeometry(0.2, 0.34, 18, 1, true).rotateX(Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0xff3d81, side: THREE.DoubleSide }), 0, 0, -0.36);
-    add(boom, new THREE.CircleGeometry(0.2, 18), L(0x111111), 0, 0, -0.2);
-    add(boom, new THREE.BoxGeometry(0.075, 0.16, 0.07), L(0x222222), 0, -0.12, 0.1);
-    add(boom, new THREE.TorusGeometry(0.2, 0.012, 6, 28), H(3, 0.9, 1.8), 0, 0, -0.53);
-    add(boom, new THREE.BoxGeometry(0.03, 0.05, 0.3), L(0xff3d81), 0, 0.08, 0.02);
-    add(boom, new THREE.BoxGeometry(0.02, 0.02, 0.02), H(0.3, 3, 1), 0.065, 0.02, 0.1);
-    fist(boom);
-
-    this.vmGuns = { fart, six7, boom };
-    for (const g of Object.values(this.vmGuns)) { g.visible = false; this.vmRoot.add(g); }
-    this.vmRoot.position.set(0.3, -0.27, -0.62);
+    this.vm = new ViewModel(this.vmRoot, skin, sleeve);
+    this.vmRoot.position.set(0.22, -0.215, -0.66);
     // 총구 불꽃
     this.vmMuzzle = new THREE.Sprite(new THREE.SpriteMaterial({ map: flashTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
     this.vmMuzzle.scale.setScalar(0.55);
@@ -536,9 +503,8 @@ export class Game {
   }
 
   setViewWeapon(id) {
-    for (const [k, g] of Object.entries(this.vmGuns)) g.visible = k === id;
-    this.vmSwitch = 1;
-    this.vmMuzzle.position.set(0, id === 'six7' ? 0.03 : 0, id === 'fart' ? -0.48 : id === 'six7' ? -0.68 : -0.58);
+    const mz = this.vm.set(id);
+    if (mz) this.vmMuzzle.position.copy(mz);
   }
 
   resize() {
@@ -558,15 +524,19 @@ export class Game {
       if (e.repeat) return;
       this.keys.add(e.code);
       if (e.code === 'Space') this.jumpQueued = true;
+      if (e.code === 'Tab') { this.boardOpen = true; this.hud.renderBoard(this); this.hud.showBoard(true); }
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.dashQueued = true;
-      if (e.code === 'Digit1') this.switchWeapon('fart');
-      if (e.code === 'Digit2') this.switchWeapon('six7');
-      if (e.code === 'Digit3') this.switchWeapon('boom');
+      if (e.code === 'Digit1') this.switchWeapon(this.loadout.p);
+      if (e.code === 'Digit2') this.switchWeapon(this.loadout.s);
+      if (e.code === 'KeyQ') this.cycleWeapon(1);
       if (e.code === 'KeyR') this.startReload();
       if (e.code === 'KeyF') this.slap();
       if (e.code === 'KeyE') this.tryUltra();
     });
-    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+    window.addEventListener('keyup', (e) => {
+      this.keys.delete(e.code);
+      if (e.code === 'Tab') { this.boardOpen = false; this.hud.showBoard(false); }
+    });
     window.addEventListener('blur', () => { this.keys.clear(); this.mouseDown = false; this.zoom = false; });
     document.addEventListener('mousemove', (e) => {
       if (!this.locked || this.mode !== 'match') return;
@@ -597,13 +567,14 @@ export class Game {
   // 시점 돌리기. 고양이가 얼굴에 붙으면 상하좌우가 뒤집힌다
   lookBy(dx, dy, sens) {
     if (this.mode !== 'match') return;
-    const mult = sens * (this.zoom ? 0.5 : 1) * (this.grabbedBy !== null ? -1 : 1);
+    const zf = (WEAPONS[this.weapon]?.zoomFov ?? 46) / 80;
+    const mult = sens * (this.zoom ? zf * 0.95 : 1) * (this.grabbedBy !== null ? -1 : 1);
     this.yaw -= dx * mult;
     this.pitch = clamp(this.pitch - dy * mult, -1.5, 1.5);
   }
 
   cycleWeapon(dir = 1) {
-    const ids = Object.keys(WEAPONS);
+    const ids = [this.loadout.p, this.loadout.s];
     const i = ids.indexOf(this.weapon);
     this.switchWeapon(ids[(i + (dir > 0 ? 1 : ids.length - 1)) % ids.length]);
   }
@@ -622,7 +593,7 @@ export class Game {
     this.reloadT = 0;
     this.cooldown = Math.max(this.cooldown, 0.12);
     this.setViewWeapon(id);
-    this.sfx.click();
+    this.sfx.equip?.(id);
     this.hud.setWeapon(WEAPONS[id]);
     this.me?.setWeapon(id);
   }
@@ -631,7 +602,7 @@ export class Game {
     const w = WEAPONS[this.weapon];
     if (this.reloadT > 0 || this.ammo[w.id] >= w.mag || !this.alive || this.infAmmo() || this.forced) return;
     this.reloadT = w.reload;
-    this.sfx.reload();
+    this.sfx.reloadStart?.(w.id);
   }
 
   // ---------- 대기실 배경 ----------
@@ -789,7 +760,8 @@ export class Game {
 
   onSnap(m) {
     this.timeLeft = m.left;
-    this.scores = m.players.map((s) => ({ id: s.id, k: s.k }));
+    this.scores = m.players.map((s) => ({ id: s.id, k: s.k, d: s.d ?? 0 }));
+    if (this.boardOpen) this.hud.renderBoard(this);
     for (const s of m.players) {
       const mine = s.id === this.myId;
       if (mine) {
@@ -848,14 +820,14 @@ export class Game {
   }
 
   onShot(m) {
-    const color = { fart: 0x9be02a, six7: 0xffe600, boom: 0xff3d81, laser: 0xff1133 }[m.w];
+    const color = { fart: 0x9be02a, six7: 0xffe600, boom: 0xff3d81, laser: 0xff1133, sniper: 0xfff4b0, ice: 0xbfeaff, dual: 0xffa040 }[m.w];
     for (const end of m.ends) {
-      this.effects.tracer(m.o, end, color, m.w === 'six7' || m.w === 'laser' ? 0.08 : 0.04, 0.12);
+      this.effects.tracer(m.o, end, color, m.w === 'sniper' || m.w === 'ice' ? 0.12 : m.w === 'six7' || m.w === 'laser' ? 0.08 : 0.04, m.w === 'sniper' ? 0.3 : 0.12);
       if (m.w !== 'fart') this.effects.impact(end, color, 3);
     }
     this.effects.flash(m.o, color, 16, 9, 0.07);
     if (m.id !== undefined) this.chars.get(m.id)?.fire(m.w);
-    this.sfx.shoot(m.w, true);
+    this.sfx.shoot(m.w, true, false, m.o);
     if (m.w === 'fart' && this.camera.position.distanceTo(new THREE.Vector3(...m.o)) > 5) this.effects.cloud(m.o, 2);
     if (m.w === 'six7' && this.camera.position.distanceTo(new THREE.Vector3(...m.ends[0])) > 7) {
       this.effects.text(m.ends[0], '67', { color: '#ffe600', scale: 1.1, life: 0.6 });
@@ -881,7 +853,7 @@ export class Game {
       this.effects.burst(hitAt, { n: m.head ? 18 : 8, speed: m.head ? 8 : 5, color: m.head ? 0xffd21f : 0xff3d70, size: 0.17, life: 0.42, g: 12, drag: 1.6, hdr: 2.4 });
       if (m.head) this.effects.flash(hitAt, 0xffd21f, 26, 7, 0.14);
     }
-    if (m.weapon === 'slap') this.sfx.slap();
+    if (m.weapon === 'slap') this.sfx.slap(m.pos);
     if (m.weapon === 'rizz' && c) this.effects.text([m.pos[0], m.pos[1] + 2.3, m.pos[2]], pick(['😘', '💋', '💖']), { scale: 0.9, life: 0.7, stroke: null });
     if (m.weapon === 'reflect' && c) {
       this.effects.text([m.pos[0], m.pos[1] + 2.3, m.pos[2]], 'nah', { color: '#60c8ff', scale: 1, life: 0.6 });
@@ -912,14 +884,14 @@ export class Game {
     }
     if (fromMe) {
       this.hud.hitmarker(m.head);
-      this.sfx.tick();
+      this.sfx.hitmark?.(m.head);
       if (m.head) { this.sfx.metalPipe(); this.hud.shout('HEADSHOT', 'gold'); }
       const pos = [m.pos[0], m.pos[1] + (m.head ? 2.2 : 1.4), m.pos[2]];
       this.effects.text(pos, `-${m.dmg}`, { color: m.head ? '#ffdd00' : '#ffffff', scale: m.head ? 1.3 : 0.8, life: 0.8 });
       if (m.head) this.effects.text(pos, pick(['💀', '👁️', '🫨', '🤯']), { scale: 1.5, life: 0.8, spin: 3, stroke: null });
       if (m.weapon === 'slap') this.effects.text(pos, t('fx.slap'), { color: '#ff4d6d', scale: 1.6, life: 0.8 });
     } else if (c && !mine && m.weapon !== 'claw') {
-      this.sfx.bonk();
+      this.sfx.bonk(m.pos);
     }
   }
 
@@ -951,6 +923,7 @@ export class Game {
       if (iKilled) {
         const line = pick(lines('kill'));
         this.hud.killCutIn(line, m.head);
+        this.sfx.killConfirm?.();
         this.sfx.vineBoom();
         setTimeout(() => this.sfx.airhorn(), 160);
         this.meme(line);
@@ -981,7 +954,6 @@ export class Game {
       this.sfx.sadTrombone();
       this.sfx.bigFart();
       this.meme(line, true);
-      if (m.victimKills === 6 && m.killerKills === 6) this.hud.shout(t('shout.matchPoint'), 'gold');
     }
   }
 
@@ -1076,6 +1048,11 @@ export class Game {
       this.setGrabbed(null);
     }
     if (m.id === this.myId && m.to !== null) this.sfx.meow();
+    if (m.slapped) {
+      const c = this.chars.get(m.id);
+      if (c) this.effects.text([c.root.position.x, c.root.position.y + 2, c.root.position.z], 'MRRAW?!', { color: '#ff9a3c', scale: 1.2, life: 0.6 });
+      this.sfx.slap();
+    }
   }
 
   onWave(m) {
@@ -1159,15 +1136,137 @@ export class Game {
     if (d < m.range) this.shake = Math.min(1, this.shake + 0.25);
   }
 
-  onSlow(m) {
+  tickAudio(dt) {
+    const cam = this.camera.position;
+    this.sfx.setListener?.(cam.x, cam.y, cam.z, this.yaw);
+    // 내 발소리: 땅에서 일정 거리마다
+    const sp = Math.hypot(this.body.vx, this.body.vz);
+    if (this.alive && this.body.onGround && sp > 1.5) {
+      this.stepAcc = (this.stepAcc ?? 0) + sp * dt;
+      if (this.stepAcc > (sp > 7 ? 2.6 : 2.1)) { this.stepAcc = 0; this.sfx.step?.(null, sp > 7); }
+    }
+    // 남의 발소리
+    for (const [id, c] of this.chars) {
+      if (id === this.myId || !c.root.visible || c.deadT >= 0 || c.air > 0.5 || c.speed < 1.5) continue;
+      c.stepAcc = (c.stepAcc ?? 0) + c.speed * dt;
+      if (c.stepAcc > 2.4) {
+        c.stepAcc = 0;
+        const p = c.root.position;
+        this.sfx.step?.([p.x, p.y, p.z], c.speed > 7);
+      }
+    }
+    // 체력 바닥이면 심장이 쿵쾅
+    if (this.alive && this.hp > 0 && this.hp < 30) {
+      this.heartT = (this.heartT ?? 0) - dt;
+      if (this.heartT <= 0) { this.heartT = 0.55 + this.hp / 60; this.sfx.lowHp?.(); }
+    }
+  }
+
+  // 바나나 껍질: 바닥에 남아 있다가 밟히면 사라진다
+  onPeel(m) {
+    const g = new THREE.Group();
+    const mat = toon(0xffd83a);
+    for (let i = 0; i < 3; i++) {
+      const petal = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 6), mat);
+      petal.scale.set(0.45, 0.12, 1.1);
+      petal.position.set(Math.sin((i / 3) * Math.PI * 2) * 0.18, 0.04, Math.cos((i / 3) * Math.PI * 2) * 0.18);
+      petal.rotation.y = (i / 3) * Math.PI * 2;
+      g.add(petal);
+    }
+    const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.16, 6), toon(0x6b4a1c));
+    tip.position.y = 0.1;
+    g.add(tip);
+    g.position.set(m.pos[0], m.pos[1] + 0.02, m.pos[2]);
+    g.rotation.y = Math.random() * 6.28;
+    this.scene.add(g);
+    (this.peelMeshes ??= []).push({ g, pos: m.pos, until: performance.now() + 10000 });
+    if (m.from) this.effects.tracer([m.from[0], m.from[1] + 1.8, m.from[2]], [m.pos[0], m.pos[1] + 0.2, m.pos[2]], 0xffd83a, 0.08, 0.25);
+    this.effects.dust(m.pos, 4, 0xffd83a);
+  }
+
+  onSlip(m) {
+    if (this.peelMeshes) {
+      const i = this.peelMeshes.findIndex((k) => Math.hypot(k.pos[0] - m.pos[0], k.pos[2] - m.pos[2]) < 0.1);
+      if (i >= 0) { this.scene.remove(this.peelMeshes[i].g); this.peelMeshes.splice(i, 1); }
+    }
+    const c = this.chars.get(m.to);
+    if (c) this.effects.text([c.root.position.x, c.root.position.y + 2.4, c.root.position.z], t('fx.slip'), { color: '#ffd83a', scale: 1.3, life: 0.8 });
+    this.sfx.boing();
+    if (m.to === this.myId) { this.hud.shout(t('shout.slip'), 'gold'); this.spin = Math.max(this.spin, 6); }
+  }
+
+  tickPeels() {
+    if (!this.peelMeshes?.length) return;
+    const now = performance.now();
+    this.peelMeshes = this.peelMeshes.filter((k) => {
+      if (now < k.until) return true;
+      this.scene.remove(k.g);
+      return false;
+    });
+  }
+
+  clearPeels() {
+    for (const k of this.peelMeshes ?? []) this.scene.remove(k.g);
+    this.peelMeshes = [];
+  }
+
+  // 페드로 댄스에 걸림: 그 자리에서 춤만 춘다
+  onDance(m) {
     const c = this.chars.get(m.to);
     if (c) {
+      c.danceUntil = performance.now() + m.ms;
+      this.effects.text([c.root.position.x, c.root.position.y + 2.8, c.root.position.z], '🎶', { scale: 1.1, life: 1, stroke: null });
+    }
+    if (m.to !== this.myId) return;
+    this.charmUntil = performance.now() + m.ms;
+    this.charmBy = null;
+    this.emote = 0;
+    this.mouseDown = false;
+    this.hud.setCharm(m.ms);
+    this.hud.shout(t('shout.dance'), 'red');
+  }
+
+  // 모깅: 뮤잉남 눈에서 상대에게 금빛 줄
+  onMog(m) {
+    const src = this.chars.get(m.id);
+    if (!src || !m.to.length) return;
+    const p = src.root.position;
+    for (const id of m.to) {
+      const c = this.chars.get(id);
+      if (!c) continue;
+      const q = c.root.position;
+      this.effects.tracer([p.x, p.y + 1.75, p.z], [q.x, q.y + 1.3, q.z], 0xfff1a8, 0.05, 0.3);
+      if (Math.random() < 0.35) this.effects.text([q.x, q.y + 2.4, q.z], t('fx.mogged'), { color: '#fff1a8', scale: 0.9, life: 0.5 });
+    }
+    if (m.to.includes(this.myId) && !this.mogShoutAt || (m.to.includes(this.myId) && performance.now() - this.mogShoutAt > 1500)) {
+      this.mogShoutAt = performance.now();
+      this.hud.shout(t('shout.mogged'), 'gold');
+    }
+  }
+
+  onIce(m) {
+    const p = m.pos;
+    this.effects.burst(p, { n: 26, speed: 7, up: 2, color: 0xe8fbff, color2: 0x7fd8ff, size: 0.22, life: 0.7, g: 6, drag: 1.4, hdr: 2.2 });
+    this.effects.burst(p, { n: 10, speed: 1.6, up: 0.6, color: 0xffffff, color2: 0xbfeaff, size: 0.8, size2: 1.8, life: 1.1, drag: 2.5, additive: false, alpha: 0.55 });
+    this.effects.ring([p[0], p[1] - 0.5, p[2]], m.radius);
+    this.effects.flash(p, 0xbfeaff, 30, m.radius * 2.5, 0.18);
+    this.sfx.iceHit?.(p);
+    const d = Math.hypot(this.body.x - p[0], this.body.y - p[1], this.body.z - p[2]);
+    if (d < m.radius * 2) this.shake = Math.min(1, this.shake + 0.25);
+  }
+
+  onSlow(m) {
+    const c = this.chars.get(m.to);
+    if (c && m.ice) {
+      this.effects.text([c.root.position.x, c.root.position.y + 2.6, c.root.position.z], t('fx.frozen'), { color: '#bfeaff', scale: 1, life: 0.8 });
+    } else if (c) {
       this.effects.text([c.root.position.x, c.root.position.y + 2.8, c.root.position.z], '😌', { scale: 1.1, life: 1.2, stroke: null });
       this.effects.burst([c.root.position.x, c.root.position.y + 1.2, c.root.position.z], { n: 10, speed: 1.2, up: 0.9, color: 0x60c8ff, size: 0.2, life: 1.2, hdr: 2, drag: 1 });
     }
     if (m.to !== this.myId) return;
     this.slowUntil = performance.now() + m.ms;
     this.hud.setSlow(m.ms);
+    if (m.ice) { this.hud.shout(t('shout.frozen'), 'blue'); this.pipeline.hit?.(0.4); return; }
     this.hud.shout(t('shout.slow', { name: this.nameOf(m.id) }), 'gold');
   }
 
@@ -1231,6 +1330,18 @@ export class Game {
     } else if (kind === 'rizz') {
       this.sfx.sparkle();
       this.sfx.say('rizz', { pitch: 0.2, rate: 0.5 });
+    } else if (kind === 'banana') {
+      this.sfx.squeak();
+      this.sfx.say(t('tts.banana'), { lang: ttsLang(), pitch: 1.8, rate: 0.9 });
+    } else if (kind === 'pedro') {
+      this.sfx.say('pedro pedro pedro', { pitch: 1.4, rate: 1.2 });
+      this.hud.rain(['PEDRO', 'PEDRO', '🦝', '🎶'], 10);
+    } else if (kind === 'mew') {
+      this.sfx.vineBoom();
+      this.sfx.say('mog', { pitch: 0.1, rate: 0.5 });
+    } else if (kind === 'ballerina') {
+      this.sfx.boing(true);
+      this.sfx.say('ballerina cappuccina', { lang: 'it-IT', pitch: 1.3, rate: 1 });
     }
   }
 
@@ -1305,7 +1416,7 @@ export class Game {
 
   onBoom(m) {
     this.effects.explosion(m.pos);
-    this.sfx.explosion();
+    this.sfx.explosion(m.pos);
     if (Math.hypot(this.body.x - m.pos[0], this.body.z - m.pos[2]) < 14) this.pipeline.hit(0.8);
     const d = Math.hypot(this.body.x - m.pos[0], this.body.z - m.pos[2]);
     if (d < 16) this.shake = Math.min(1, this.shake + (1 - d / 16) * 0.6);
@@ -1332,7 +1443,7 @@ export class Game {
     const up = new THREE.Vector3().crossVectors(right, dir).normalize();
     const moving = Math.hypot(this.body.vx, this.body.vz) > 2 ? 1.6 : 1;
     const air = this.body.onGround ? 1 : 1.5;
-    const zoom = this.zoom ? 0.45 : 1;
+    const zoom = this.zoom ? (w.zoomSpread ?? 0.45 * w.spread) / w.spread : 1;
     const spread = w.spread * (w.pellets > 1 ? 1 : moving * air * zoom);
     const out = [];
     for (let i = 0; i < w.pellets; i++) {
@@ -1382,7 +1493,7 @@ export class Game {
         if (h) { hit = h; t = h.t; }
       }
       const end = [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
-      const col = { fart: 0x9be02a, six7: 0xffe600, boom: 0xff3d81, laser: 0xff1133 }[w.id];
+      const col = { fart: 0x9be02a, six7: 0xffe600, boom: 0xff3d81, laser: 0xff1133, sniper: 0xfff4b0, ice: 0xbfeaff, dual: 0xffa040 }[w.id];
       if (w.id === 'laser') {
         // 눈 두 개에서 나간다
         const far = [o[0] + d[0] * w.range, o[1] + d[1] * w.range, o[2] + d[2] * w.range];
@@ -1392,7 +1503,7 @@ export class Game {
         if (wall < w.range - 0.1) this.effects.impact([o[0] + d[0] * wall, o[1] + d[1] * wall, o[2] + d[2] * wall], col, 4);
         continue;
       }
-      this.effects.tracer(muzzle, end, col, w.id === 'six7' ? 0.06 : 0.025, 0.08);
+      this.effects.tracer(muzzle, end, col, w.id === 'sniper' ? 0.09 : w.id === 'ice' ? 0.1 : w.id === 'six7' ? 0.06 : 0.025, w.id === 'sniper' ? 0.25 : 0.08);
       if (t < w.range - 0.1 && w.id !== 'fart' && (w.id !== 'boom' || Math.random() < 0.45)) this.effects.impact(end, col, w.id === 'boom' ? 3 : 8);
       if (!hit && t < w.range - 0.1 && (w.id !== 'boom' || Math.random() < 0.3)) {
         if (w.id === 'fart') this.effects.cloud(end, 1, 0xb5e02a);
@@ -1400,9 +1511,11 @@ export class Game {
         if (w.id === 'boom') this.effects.text(end, '💥', { scale: 0.7, life: 0.3, stroke: null, rise: 0 });
       }
     }
-    const muzzleCol = { fart: 0x9be02a, six7: 0xffd060, boom: 0xff3d81, laser: 0xff1133 }[w.id];
+    const muzzleCol = { fart: 0x9be02a, six7: 0xffd060, boom: 0xff3d81, laser: 0xff1133, sniper: 0xfff4b0, ice: 0xbfeaff, dual: 0xffa040 }[w.id];
     if (w.id !== 'laser') {
       this.vmFlash = 0.055;
+      this.vm.fire(w.id);
+      if (this.vm.muzzle) this.vmMuzzle.position.copy(this.vm.muzzle);
       this.vmMuzzle.material.color.set(muzzleCol).multiplyScalar(2.8);
       this.vmMuzzle.material.rotation = Math.random() * 6.28;
       this.vmLight.color.set(muzzleCol);
@@ -1415,6 +1528,10 @@ export class Game {
     if (w.id === 'boom') {
       this.shake = Math.min(1, this.shake + 0.22);
       this.hud.shout('BOOM', 'red');
+    }
+    if (w.id === 'sniper') {
+      this.shake = Math.min(1, this.shake + 0.3);
+      this.fovKick = Math.max(this.fovKick, 4);
     }
     if (!inf && this.ammo[w.id] <= 0) this.startReload();
   }
@@ -1467,6 +1584,7 @@ export class Game {
       if (m.isGroup) m.rotation.y = t * 2;
     }
     for (const c of this.chars.values()) c.update(dt);
+    if (this.mode === 'match') this.tickAudio(dt);
     this.updateCharFx(dt, t);
     this.worldTick?.(t, dt);
     this.effects.update(dt);
@@ -1521,6 +1639,7 @@ export class Game {
   }
 
   updateMatch(dt) {
+    this.tickPeels();
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.slapCd = Math.max(0, this.slapCd - dt);
     this.slapT = Math.max(0, this.slapT - dt);
@@ -1532,7 +1651,7 @@ export class Game {
       this.reloadT -= dt;
       if (this.reloadT <= 0) {
         this.ammo[this.weapon] = WEAPONS[this.weapon].mag;
-        this.sfx.click();
+        this.sfx.reloadEnd?.(this.weapon);
       }
     }
 
@@ -1619,7 +1738,7 @@ export class Game {
     const opts = {
       map: this.map,
       gravityMul: this.eventKind === 'moon' ? 0.35 : 1,
-      speedMul: this.ultraKind === 'sigma' || this.ultraKind === 'streamer' ? MOVE.ultraSpeedMul : performance.now() < this.slowUntil ? CHILL.slowMul : this.grabbedBy !== null ? 0.55 : 1,
+      speedMul: this.ultraKind === 'ballerina' ? SPIN.speedMul : this.ultraKind === 'sigma' || this.ultraKind === 'streamer' ? MOVE.ultraSpeedMul : performance.now() < this.slowUntil ? CHILL.slowMul : this.grabbedBy !== null ? 0.55 : 1,
     };
     const events = stepBodyFixed(this.body, {
       fwd, right, yaw: this.yaw, jump: this.jumpQueued && !this.frozen, dash: this.dashQueued && !this.frozen,
@@ -1627,7 +1746,7 @@ export class Game {
     this.jumpQueued = false;
     this.dashQueued = false;
     for (const e of events) {
-      if (e === 'jump') this.sfx.quack();
+      if (e === 'jump') { this.sfx.jump?.(); if (Math.random() < 0.25) this.sfx.quack(); }
       if (e === 'doubleJump') { this.sfx.quack(); this.sfx.boing(); this.spin = Math.PI * 2; }
       if (e === 'pad') { this.sfx.boing(true); this.hud.shout(t('shout.pad'), 'gold'); }
       if (e === 'dash') {
@@ -1640,7 +1759,7 @@ export class Game {
       if (e === 'land') {
         this.sfx.land();
         this.landDipV = -1.3;
-        this.vmRoot.position.y -= 0.03;
+        this.vm.land(Math.min(1.5, Math.abs(this.body.vy) / 8 + 0.6));
         this.effects.dust([this.body.x, this.body.y, this.body.z], 7);
       }
       if (e === 'jump' || e === 'doubleJump') this.effects.dust([this.body.x, this.body.y, this.body.z], e === 'jump' ? 4 : 9, e === 'jump' ? 0xd8c8b8 : 0xffd21f);
@@ -1678,7 +1797,7 @@ export class Game {
 
   updateCameraBase(dt) {
     const cam = this.camera;
-    const fovBase = this.zoom ? 46 : 80;
+    const fovBase = this.zoom ? (WEAPONS[this.weapon]?.zoomFov ?? 46) : 80;
     const runFov = this.zoom ? 0 : Math.min(1, Math.hypot(this.body.vx, this.body.vz) / 14) * 3;
     const want = fovBase + runFov + this.fovKick + (this.ultra ? 8 : 0);
     if (Math.abs(cam.fov - want) > 0.05) {
@@ -1732,16 +1851,8 @@ export class Game {
   }
 
   updateViewmodel(dt) {
-    const speed = Math.hypot(this.body.vx, this.body.vz);
     const t = performance.now() / 1000;
-    const bob = this.body.onGround ? Math.min(1, speed / 9) : 0.2;
-    const baseX = this.zoom ? 0.02 : 0.3;
-    const baseY = this.zoom ? -0.2 : -0.27 - Math.min(1, speed / 14) * 0.02;
-    const vm = this.vmRoot;
-    vm.position.x += ((baseX + Math.cos(t * 9) * 0.02 * bob) - vm.position.x) * Math.min(1, dt * 14);
-    vm.position.y = baseY + Math.abs(Math.sin(t * 9)) * 0.022 * bob - (this.body.vy * 0.002);
-    vm.position.z = -0.62 + this.recoil * 0.12;
-    // 조준을 돌리면 총이 늦게 따라오고, 뛰면 숙인다
+    // 조준을 돌리면 총이 늦게 따라온다
     let dy = this.yaw - this.lastYaw;
     while (dy > Math.PI) dy -= Math.PI * 2;
     while (dy < -Math.PI) dy += Math.PI * 2;
@@ -1751,27 +1862,26 @@ export class Game {
     const inv = 1 / Math.max(dt, 0.001);
     this.swayX += (clamp(dy * inv * 0.022, -0.16, 0.16) - this.swayX) * Math.min(1, dt * 11);
     this.swayY += (clamp(dp * inv * 0.02, -0.12, 0.12) - this.swayY) * Math.min(1, dt * 11);
-    vm.position.x += this.swayX * 0.1;
-    vm.position.y += this.swayY * 0.1;
-    this.vmSwitch = Math.max(0, this.vmSwitch - dt * 5.2);
-    const sw = this.vmSwitch * this.vmSwitch;
-    vm.position.y -= sw * 0.42;
-    vm.rotation.x = this.recoil * 0.28 + this.swayY + sw * -0.9;
-    vm.rotation.y = this.swayX;
+    const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+    const vx = this.body.vx, vz = this.body.vz;
+    const w = WEAPONS[this.weapon];
+    this.scoped = this.zoom && !!w?.zoomFov && this.alive && this.reloadT <= 0 && this.ultraKind !== 'minsu';
+    if (this.scoped !== this.wasScoped) { this.wasScoped = this.scoped; document.body.classList.toggle('scoped', this.scoped); }
+    this.vm.update({
+      dt, t,
+      speed: Math.hypot(vx, vz),
+      side: vx * cy - vz * sy,
+      onGround: this.body.onGround,
+      vy: this.body.vy,
+      zoom: this.zoom,
+      sway: [this.swayX, this.swayY],
+      reloadK: this.reloadT > 0 && w ? 1 - this.reloadT / w.reload : -1,
+      scoped: this.scoped,
+      sigma: this.ultraKind === 'sigma',
+    });
     this.vmFlash = Math.max(0, this.vmFlash - dt);
     this.vmMuzzle.material.opacity = this.vmFlash > 0 ? 1 : 0;
     this.vmLight.intensity = this.vmFlash > 0 ? 4 : 0;
-    if (this.vmGas) this.vmGas.material.color.setRGB(1.4, 2.4 + Math.sin(t * 5) * 0.8, 0.35);
-    const w = WEAPONS[this.weapon];
-    if (this.reloadT > 0) {
-      const k = 1 - this.reloadT / w.reload;
-      vm.rotation.x = Math.sin(k * Math.PI) * 0.6;
-      vm.rotation.z = k * Math.PI * 2;
-      vm.position.y -= Math.sin(k * Math.PI) * 0.2;
-    } else {
-      vm.rotation.z = 0;
-    }
-    vm.scale.setScalar(this.ultraKind === 'sigma' ? 1.25 : 1);
 
     const h = this.vmHand;
     h.visible = this.slapT > 0;

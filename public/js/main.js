@@ -1,5 +1,5 @@
 // 접속, 방 목록, 대기실, 결과 화면. 경기가 끝나면 항상 대기실로 돌아온다.
-import { SKIN_IDS, WIN_KILLS, MAX_PLAYERS, ULTRAS } from '../shared/constants.js';
+import { SKIN_IDS, MAX_PLAYERS, ULTRAS, WEAPONS, PRIMARY_IDS, SECONDARY_IDS, cleanLoadout } from '../shared/constants.js';
 import { MAPS, MAP_IDS } from '../shared/map.js';
 import { Sfx } from './audio.js';
 import { Hud } from './hud.js';
@@ -81,7 +81,7 @@ function connect() {
 }
 
 function sendHello() {
-  net.send({ t: 'hello', name: $('nameInput').value.trim() || t('home.nickPh'), skin: currentSkin, look: profile.data.equip });
+  net.send({ t: 'hello', name: $('nameInput').value.trim() || t('home.nickPh'), skin: currentSkin, look: profile.data.equip, loadout: myLoadout() });
 }
 
 const H = net.handlers;
@@ -198,6 +198,7 @@ H.room = (m) => {
 };
 H.chat = (m) => { if (!chatOff()) addChat(m.from, m.text); };
 H.matchStart = (m) => {
+  game.loadout = myLoadout();
   inMatch = true;
   document.body.classList.add('playing');
   sfx.unlock();
@@ -231,6 +232,11 @@ H.ultraExt = (m) => inMatch && game.onUltraExt(m);
 H.charm = (m) => inMatch && game.onCharm(m);
 H.bark = (m) => inMatch && game.onBark(m);
 H.slow = (m) => inMatch && game.onSlow(m);
+H.ice = (m) => inMatch && game.onIce(m);
+H.peel = (m) => inMatch && game.onPeel(m);
+H.slip = (m) => inMatch && game.onSlip(m);
+H.dance = (m) => inMatch && game.onDance(m);
+H.mog = (m) => inMatch && game.onMog(m);
 H.nuke = (m) => inMatch && game.onNuke(m);
 H.nukeBoom = (m) => inMatch && game.onNukeBoom(m);
 H.matchEnd = (m) => {
@@ -390,6 +396,53 @@ function renderMaps(box) {
   }
 }
 
+const myLoadout = () => cleanLoadout(profile?.data.loadout);
+
+// 무기 고르기: 주무기 하나, 보조무기 하나. 숫자 막대로 대충 성능을 보여 준다
+const WSTAT = {
+  fart: [2, 5, 3], boom: [5, 2, 1], sniper: [5, 1, 5], ice: [4, 2, 3], six7: [4, 2, 4], dual: [2, 4, 2],
+};
+function renderLoadout(box) {
+  box.replaceChildren();
+  const cur = myLoadout();
+  const lock = room && room.state !== 'lobby';
+  for (const [key, ids] of [['p', PRIMARY_IDS], ['s', SECONDARY_IDS]]) {
+    const row = document.createElement('div');
+    row.className = 'wRow';
+    const lab = document.createElement('span');
+    lab.className = 'wSlot';
+    lab.textContent = key === 'p' ? '1' : '2';
+    row.append(lab);
+    for (const id of ids) {
+      const b = document.createElement('button');
+      const on = cur[key] === id;
+      b.className = `wBtn${on ? ' on' : ''}`;
+      b.setAttribute('aria-pressed', on);
+      b.disabled = lock;
+      const n = document.createElement('strong');
+      n.textContent = t(`weapon.${id}`);
+      const bars = document.createElement('span');
+      bars.className = 'wBars';
+      WSTAT[id].forEach((v, i) => {
+        const bar = document.createElement('i');
+        bar.style.setProperty('--v', v / 5);
+        bar.title = t(['wstat.dmg', 'wstat.rate', 'wstat.range'][i]);
+        bars.append(bar);
+      });
+      b.append(n, bars);
+      b.onclick = () => {
+        const next = { ...myLoadout(), [key]: id };
+        profile.setLoadout(next);
+        net.send({ t: 'loadout', loadout: next });
+        sfx.click();
+        renderLoadout(box);
+      };
+      row.append(b);
+    }
+    box.append(row);
+  }
+}
+
 function renderModes(box) {
   box.replaceChildren();
   for (const id of ['classic', 'rush']) {
@@ -463,6 +516,7 @@ function renderRoom() {
   $('botBtn').disabled = room.state !== 'lobby' || room.players.length >= MAX_PLAYERS;
   $('botOutBtn').disabled = room.state !== 'lobby' || !room.players.some((p) => p.isBot);
   renderModes($('modePick'));
+  renderLoadout($('loadoutPick'));
   renderMaps($('mapPick'));
   renderSkins($('skinPick'));
   showSkinDesc();
@@ -605,13 +659,14 @@ function showResult(m) {
   const draw = m.winner === null;
   const box = $('result');
   box.dataset.outcome = draw ? 'draw' : won ? 'win' : 'lose';
-  const reason = { kills: t('reason.kills', { n: WIN_KILLS }), time: t('reason.time'), ragequit: t('reason.ragequit') }[m.reason] ?? '';
+  const reason = { time: t('reason.time'), ragequit: t('reason.ragequit') }[m.reason] ?? '';
   $('resultTitle').textContent = draw ? t('result.draw') : pick(lines(won ? 'win' : 'lose'));
   $('resultSub').textContent = `${t(won ? 'result.win' : draw ? 'result.drawSub' : 'result.lose')} · ${reason}`;
   $('sixSevenBanner').hidden = !m.sixSeven;
 
   const table = $('resultStats');
   table.replaceChildren();
+  table.classList.toggle('many', m.players.length > 4);
   // 순위표: 순위, 얼굴, 이름, 킬 수만 크게. 나머지 기록은 한 줄로
   // 기권승이면 킬이 적어도 승자를 맨 위에
   const ranked = [...m.players].sort((a, b) => (b.id === m.winner) - (a.id === m.winner));

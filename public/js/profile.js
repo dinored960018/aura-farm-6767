@@ -4,7 +4,7 @@ import { SKIN_IDS } from '../shared/constants.js';
 
 const KEY = 'aura-profile-v1';
 export const START_SKINS = ['minsu', 'sigma', 'cat', 'toilet'];
-export const UNLOCK_LEVEL = { cone: 2, streamer: 3, tung: 4, hero: 5, rizz: 6, chill: 7 };
+export const UNLOCK_LEVEL = { cone: 2, streamer: 3, banana: 3, tung: 4, hero: 5, pedro: 5, rizz: 6, chill: 7, mew: 8, ballerina: 9 };
 
 // 다음 레벨까지 필요한 경험치. 봇전 한 판이 대략 80~150
 export const xpNeed = (level) => 120 + (level - 1) * 60;
@@ -79,6 +79,8 @@ export function createProfile(store) {
       save();
       return true;
     },
+    // 대기실에서 고른 주무기·보조무기
+    setLoadout(l) { p.loadout = { ...l }; save(); },
     equip(slot, id) {
       if (id && !p.owned.includes(id)) return;
       if (id) p.equip[slot] = id;

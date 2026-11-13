@@ -151,7 +151,10 @@ export class Bot extends Player {
         room.onSlap(this, { d: dir });
         return;
       }
-      const w = this.ultraKind === 'minsu' ? LASER : dist < 9 ? WEAPONS.boom : dist < 22 ? WEAPONS.fart : WEAPONS.six7;
+      // 들고 있는 두 자루 중 거리에 맞는 걸 쓴다
+      const { p, s } = this.loadout;
+      const usePrimary = p === 'boom' ? dist < 12 : p === 'sniper' ? dist > 12 : p === 'ice' ? dist > 5 && dist < 35 : dist < 26;
+      const w = this.ultraKind === 'minsu' ? LASER : WEAPONS[usePrimary ? p : s];
       if (w !== LASER) this.weapon = w.id;
       this.nextShot = now + w.interval * 1000 * (w.auto ? 1.3 : 1.8);
       const aimErr = 0.05 + dist * 0.0018;

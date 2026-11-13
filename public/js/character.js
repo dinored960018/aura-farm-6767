@@ -211,6 +211,10 @@ const OUTFIT = {
   hero: { pants: 0x1c1c22, shoe: 0xe8342c, iris: 0x222222, brow: null },
   rizz: { pants: 0x24182e, shoe: 0xfafafa, iris: 0xd0208a, brow: 0x1a1a24, browTilt: -0.15 },
   chill: { pants: 0x3f6aa8, shoe: 0xd9d4c8, iris: 0x2a1a0c, brow: null, lid: 0.04 },
+  banana: { pants: 0xffd83a, shoe: 0x6b4a1c, iris: 0x3a2a1a, brow: 0x9a9080, browTilt: -0.35, lid: 0.7 },
+  pedro: { pants: 0x5c5c66, shoe: 0x2a2a30, iris: 0x1a1a1a, brow: null },
+  mew: { pants: 0x2a2a33, shoe: 0xf2f2f2, iris: 0x4a3020, brow: 0x2a1a10, browTilt: 0.28, lid: 0.45 },
+  ballerina: { pants: 0xfff0f4, shoe: 0xff8fc1, iris: 0x3a2014, brow: 0x5a3a20, browTilt: -0.1 },
 };
 
 export class Character {
@@ -475,7 +479,7 @@ export class Character {
     // 코와 귀
     if (!['cat', 'hero', 'chill', 'cone', 'tung'].includes(skinId)) {
       this.head.add(mesh(GEO.nose, skin, 0, -0.03, -0.53));
-      for (const s of [-1, 1]) if (skinId !== 'streamer') this.head.add(mesh(GEO.ear, skin, s * 0.52, 0.02, 0));
+      for (const s of [-1, 1]) if (!['streamer', 'banana', 'pedro', 'ballerina'].includes(skinId)) this.head.add(mesh(GEO.ear, skin, s * 0.52, 0.02, 0));
     }
 
     // 선글라스 (아우라 파밍 중에만)
@@ -675,7 +679,8 @@ export class Character {
       const hair = lambert(0x15100c);
       this.head.add(mesh(new THREE.SphereGeometry(0.538, 18, 10, 0, Math.PI * 2, 0, 1.0), hair, 0, 0.02, 0.02));
       const black = lambert(0x18181c);
-      this.head.add(mesh(new THREE.TorusGeometry(0.54, 0.05, 8, 26, Math.PI).rotateY(Math.PI / 2), black, 0, 0.1, 0));
+      // 머리띠는 귀에서 귀로 정수리를 넘어간다
+      this.head.add(mesh(new THREE.TorusGeometry(0.575, 0.045, 8, 26, Math.PI), black, 0, 0.08, 0.03));
       for (const s of [-1, 1]) {
         this.head.add(mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.12, 18).rotateZ(Math.PI / 2), lambert(0xd81e2c), s * 0.53, 0.08, 0));
         this.head.add(skipOutline(mesh(new THREE.TorusGeometry(0.12, 0.018, 6, 18).rotateY(Math.PI / 2), hdr(0xff2233, 2.4), s * 0.6, 0.08, 0)));
@@ -772,6 +777,122 @@ export class Character {
       v.add(mesh(new THREE.TorusGeometry(0.22, 0.075, 8, 20).rotateX(Math.PI / 2), rib, 0, 1.36, 0));
       v.add(mesh(new THREE.CylinderGeometry(0.34, 0.33, 0.1, 18), rib, 0, 0.72, 0));
     }
+    else if (skinId === 'banana') {
+      // 바나나 옷을 뒤집어쓴 우는 고양이
+      const peel = lambert(0xffd83a);
+      const dark = lambert(0x6b4a1c);
+      const gap = 1.2; // 얼굴 쪽은 뚫어 둔다
+      const hood = mesh(new THREE.SphereGeometry(0.6, 20, 14, Math.PI * 1.5 + gap, Math.PI * 2 - gap * 2, 0, 2.0), peel, 0, 0.02, 0.04);
+      hood.material = hood.material.clone();
+      hood.material.side = THREE.DoubleSide;
+      this.head.add(hood);
+      this.head.add(mesh(new THREE.TorusGeometry(0.5, 0.06, 8, 24, Math.PI * 1.25).rotateY(Math.PI / 2).rotateX(-Math.PI * 0.12), peel, 0, 0.02, -0.1));
+      const stem = mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.3, 8), dark, 0.06, 0.72, 0.08);
+      stem.rotation.z = -0.35;
+      this.head.add(stem);
+      // 고양이 귀가 바나나를 뚫고 나왔다
+      const ear = new THREE.ConeGeometry(0.15, 0.3, 4);
+      for (const s of [-1, 1]) {
+        const e = mesh(ear, skin, s * 0.3, 0.55, -0.06);
+        e.rotation.z = -s * 0.25;
+        this.head.add(e);
+      }
+      // 눈물 줄줄
+      const tear = hdr(0x6fd0ff, 1.6);
+      for (const s of [-1, 1]) {
+        const d = skipOutline(mesh(new THREE.CapsuleGeometry(0.04, 0.22, 3, 8), tear, s * 0.21, -0.14, -0.47));
+        this.head.add(d);
+        (this.tears ??= []).push(d);
+      }
+      this.head.add(mesh(new THREE.SphereGeometry(0.05, 8, 6), lambert(0xffa5c0), 0, -0.06, -0.53));
+      this.mouthBase = [0.8, 0.3, 0.5];
+      this.mouth.scale.set(...this.mouthBase);
+      // 몸통에도 껍질 꽃잎
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+        const petal = mesh(new THREE.SphereGeometry(0.2, 10, 8), peel, Math.cos(a) * 0.3, 0.7, Math.sin(a) * 0.26);
+        petal.scale.set(0.6, 1.3, 0.35);
+        petal.rotation.y = -a;
+        petal.rotation.z = Math.cos(a) * 0.4;
+        v.add(petal);
+      }
+    } else if (skinId === 'pedro') {
+      // 너구리: 눈가 검은 띠, 둥근 귀, 줄무늬 꼬리
+      const black = lambert(0x1c1c22);
+      const light = lambert(0xe8e4dc);
+      this.head.add(mesh(new THREE.SphereGeometry(0.535, 22, 6, Math.PI * 1.5 - 1.1, 2.2, 1.28, 0.42), black, 0, 0, 0));
+      for (const s of [-1, 1]) {
+        const e = mesh(new THREE.SphereGeometry(0.17, 12, 10), skin, s * 0.36, 0.45, 0.04);
+        e.scale.set(1, 1, 0.55);
+        this.head.add(e);
+        this.head.add(skipOutline(mesh(new THREE.SphereGeometry(0.1, 10, 8), black, s * 0.36, 0.45, -0.03)));
+        const cheek = mesh(new THREE.SphereGeometry(0.16, 10, 8), light, s * 0.3, -0.2, -0.36);
+        cheek.scale.set(1.2, 0.8, 0.7);
+        this.head.add(cheek);
+      }
+      const snout = mesh(new THREE.SphereGeometry(0.2, 14, 10), light, 0, -0.16, -0.44);
+      snout.scale.set(1.05, 0.75, 0.9);
+      this.head.add(snout);
+      this.head.add(skipOutline(mesh(new THREE.SphereGeometry(0.075, 10, 8), basic(0x101014), 0, -0.08, -0.62)));
+      this.mouth.position.set(0, -0.3, -0.55);
+      this.mouthBase = [0.9, 0.25, 0.4];
+      this.mouth.scale.set(...this.mouthBase);
+      v.add(mesh(new THREE.SphereGeometry(0.24, 12, 10).scale(1, 1.2, 0.5), light, 0, 1.0, -0.17)); // 배
+      this.tail = [];
+      let parent = v;
+      let px = 0, py = 0.74, pz = 0.28;
+      for (let i = 0; i < 5; i++) {
+        const seg = mesh(new THREE.CapsuleGeometry(0.11 - i * 0.008, 0.12, 3, 8).rotateX(Math.PI / 2).translate(0, 0, 0.09), i % 2 ? black : skin, px, py, pz);
+        parent.add(seg);
+        this.tail.push(seg);
+        parent = seg;
+        px = 0; py = 0; pz = 0.19;
+      }
+    } else if (skinId === 'mew') {
+      // 턱선이 생명. 입은 꾹 다물고 혀는 입천장에
+      const jaw = mesh(new THREE.SphereGeometry(0.4, 16, 12), skin, 0, -0.36, -0.1);
+      jaw.scale.set(1.18, 0.72, 1.02);
+      this.head.add(jaw);
+      const chin = mesh(new THREE.BoxGeometry(0.34, 0.16, 0.2), skin, 0, -0.56, -0.26);
+      this.head.add(chin);
+      const hair = lambert(0x2a1a10);
+      this.head.add(mesh(new THREE.SphereGeometry(0.538, 18, 10, 0, Math.PI * 2, 0, 0.82), hair, 0, 0.05, 0.02));
+      const top = mesh(new THREE.SphereGeometry(0.3, 14, 10), hair, 0, 0.5, -0.1);
+      top.scale.set(1.35, 0.55, 1.3);
+      this.head.add(top);
+      this.mouthBase = [0.8, 0.08, 0.4];
+      this.mouth.scale.set(...this.mouthBase);
+      this.mouth.position.y = -0.3;
+      collar(lambert(0x1a1a1f));
+      const n = decal('MEW', 0.3, '#ffffff');
+      n.position.set(0, 1.04, -0.255);
+      n.rotation.y = Math.PI;
+      v.add(n);
+    } else if (skinId === 'ballerina') {
+      // 머리는 카푸치노 잔, 몸은 분홍 튀튀
+      this.head.children[0].visible = false;
+      const cup = lambert(0xfaf6ee);
+      this.head.add(mesh(new THREE.CylinderGeometry(0.56, 0.4, 0.86, 26), cup, 0, -0.04, 0));
+      this.head.add(mesh(new THREE.TorusGeometry(0.555, 0.04, 8, 28).rotateX(Math.PI / 2), cup, 0, 0.39, 0));
+      this.head.add(skipOutline(mesh(new THREE.CircleGeometry(0.53, 28).rotateX(-Math.PI / 2), lambert(0xb07a4a), 0, 0.37, 0)));
+      // 라떼 아트 하트
+      const heart = skipOutline(mesh(new THREE.CircleGeometry(0.2, 3).rotateX(-Math.PI / 2).rotateY(Math.PI), lambert(0xfff4e4), 0, 0.375, 0.02));
+      this.head.add(heart);
+      for (const s of [-1, 1]) this.head.add(skipOutline(mesh(new THREE.CircleGeometry(0.1, 14).rotateX(-Math.PI / 2), lambert(0xfff4e4), s * 0.08, 0.376, -0.1)));
+      const handle = mesh(new THREE.TorusGeometry(0.17, 0.05, 8, 16), cup, 0.6, -0.02, 0);
+      this.head.add(handle);
+      this.head.add(mesh(new THREE.CylinderGeometry(0.66, 0.66, 0.05, 28), cup, 0, -0.5, 0)); // 받침
+      const pink = lambert(0xff8fc1);
+      const tutu = mesh(new THREE.ConeGeometry(0.66, 0.3, 24, 1, true).rotateX(Math.PI), pink, 0, 0.7, 0);
+      tutu.material = tutu.material.clone();
+      tutu.material.side = THREE.DoubleSide;
+      v.add(tutu);
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        v.add(mesh(new THREE.SphereGeometry(0.1, 8, 6), pink, Math.cos(a) * 0.6, 0.58, Math.sin(a) * 0.6));
+      }
+      this.mouth.position.y = -0.24;
+    }
     // 스니커즈처럼 앞코를 얹는다
     if (skinId !== 'toilet' && skinId !== 'tung') {
       for (const l of [this.legL, this.legR]) {
@@ -803,11 +924,37 @@ export class Character {
       add(new THREE.CylinderGeometry(0.06, 0.06, 0.65, 10).rotateX(Math.PI / 2), toon(0xaa8800), 0, 0.03, -0.42);
       add(new THREE.CylinderGeometry(0.09, 0.09, 0.14, 10).rotateX(Math.PI / 2), toon(0x777777), 0, 0.01, -0.1);
       add(new THREE.BoxGeometry(0.02, 0.05, 0.02), hdr(0xff2060, 3), 0, 0.12, -0.7);
+    } else if (id === 'sniper') {
+      add(new THREE.BoxGeometry(0.11, 0.13, 0.62), toon(0x3b2a5c), 0, 0, 0.02);
+      add(new THREE.CylinderGeometry(0.035, 0.04, 0.8, 10).rotateX(Math.PI / 2), toon(0x1d1d24), 0, 0.03, -0.66);
+      add(new THREE.CylinderGeometry(0.055, 0.055, 0.34, 12).rotateX(Math.PI / 2), toon(0x16161c), 0, 0.15, -0.05);
+      add(new THREE.CircleGeometry(0.05, 12), hdr(0x60c8ff, 2.5), 0, 0.15, -0.225);
+    } else if (id === 'ice') {
+      add(new THREE.CylinderGeometry(0.13, 0.13, 0.58, 14).rotateX(Math.PI / 2), toon(0x2e6fb8), 0, 0, -0.12);
+      add(new THREE.CylinderGeometry(0.17, 0.14, 0.12, 14).rotateX(Math.PI / 2), toon(0xdfe8f2), 0, 0, -0.45);
+      add(new THREE.CylinderGeometry(0.08, 0.08, 0.3, 12).rotateX(Math.PI / 2), hdr(0x9fe0ff, 1.8), 0, 0.17, -0.05);
+    } else if (id === 'dual') {
+      add(new THREE.BoxGeometry(0.09, 0.11, 0.32), toon(0xff8a1f), 0, 0.03, -0.1);
+      add(new THREE.BoxGeometry(0.08, 0.05, 0.22), toon(0x2a2a2a), 0, -0.04, -0.08);
     } else {
       add(new THREE.BoxGeometry(0.17, 0.17, 0.42), toon(0x333340));
       add(new THREE.ConeGeometry(0.3, 0.42, 16, 1, true).rotateX(Math.PI / 2), toon(0xff3d81, { side: THREE.DoubleSide }), 0, 0, -0.42);
       add(new THREE.TorusGeometry(0.29, 0.022, 6, 18), hdr(0xff90c0, 2), 0, 0, -0.62);
     }
+    // 손잡이: 주먹 아래로 빠져나와 총을 쥔 것처럼 보이게
+    add(new THREE.BoxGeometry(0.07, 0.16, 0.08), toon(0x222228), 0, -0.12, 0.06).rotation.x = 0.25;
+    // 쌍권총은 왼손에도 한 자루
+    if (!this.gun2) {
+      this.gun2 = new THREE.Group();
+      this.gun2.position.copy(this.gun.position);
+      this.gun2.rotation.copy(this.gun.rotation);
+      this.armL.userData.fore.add(this.gun2);
+      const m1 = mesh(new THREE.BoxGeometry(0.09, 0.11, 0.32), toon(0xff8a1f), 0, 0.03, -0.1);
+      const m2 = mesh(new THREE.BoxGeometry(0.07, 0.16, 0.08), toon(0x222228), 0, -0.12, 0.06);
+      m2.rotation.x = 0.25;
+      for (const m of [m1, m2]) { m.add(new THREE.Mesh(m.geometry, OUTLINE)); this.gun2.add(m); }
+    }
+    this.gun2.visible = id === 'dual';
   }
 
   pop(strength = 1) {
@@ -819,9 +966,11 @@ export class Character {
   }
 
   fire(w = 'fart') {
-    this.kick = Math.min(1.2, this.kick + (w === 'fart' ? 0.35 : 1));
+    if (w === 'dual' && (this.leftNext = !this.leftNext)) this.kick2 = Math.min(1.2, (this.kick2 ?? 0) + 0.6);
+    else this.kick = Math.min(1.2, this.kick + (w === 'fart' ? 0.35 : w === 'dual' ? 0.6 : 1));
     this.flashT = 0.06;
-    this.muzzle.material.color.setRGB(...(w === 'fart' ? [1.2, 2.6, 0.5] : w === 'boom' ? [3, 0.9, 1.8] : [2.8, 2.2, 0.8]));
+    const COL = { fart: [1.2, 2.6, 0.5], boom: [3, 0.9, 1.8], sniper: [3, 2.8, 2], ice: [1.4, 2.6, 3.2], dual: [3, 1.6, 0.4] };
+    this.muzzle.material.color.setRGB(...(COL[w] ?? [2.8, 2.2, 0.8]));
     this.muzzle.material.rotation = Math.random() * 6.28;
   }
 
@@ -985,6 +1134,46 @@ export class Character {
         H.rotation.y = Math.sin(t * 0.55) * 0.2;
         V.rotation.z = Math.sin(t * 1.1) * 0.03;
         return [-1, -1];
+      }
+      case 'banana': {
+        // 두 손으로 눈 가리고 흐느끼기
+        const sob = Math.abs(Math.sin(t * 7));
+        A.rotation.set(-2.2, 0, 0.55);
+        B.rotation.set(-2.2, 0, -0.55);
+        H.rotation.x = 0.22 + sob * 0.06;
+        V.position.y = sob * 0.03;
+        if (this.tears) for (const d of this.tears) d.scale.y = 1 + Math.sin(t * 4) * 0.3;
+        return [-1.45, -1.45];
+      }
+      case 'pedro': {
+        // 페드로 페드로 페드로: 리듬 타며 좌우로 들썩
+        const beat = t * 6.2;
+        V.position.y = Math.abs(Math.sin(beat)) * 0.12;
+        V.rotation.y = Math.sin(beat * 0.5) * 0.55;
+        H.rotation.z = Math.sin(beat) * 0.15;
+        A.rotation.set(-0.3 + Math.sin(beat) * 0.5, 0, 0.5);
+        B.rotation.set(-0.3 - Math.sin(beat) * 0.5, 0, -0.5);
+        return [-0.9, -0.9];
+      }
+      case 'mew': {
+        // 턱선 쓸어내리며 옆모습 자랑
+        const sweep = (Math.sin(t * 1.6) + 1) / 2;
+        A.rotation.set(0.05, 0, -0.08);
+        B.rotation.set(-2.15 - sweep * 0.2, 0, 0.7);
+        H.rotation.y = -0.5 + Math.sin(t * 0.6) * 0.12;
+        H.rotation.x = -0.12;
+        this.foreZ = [0, -0.5];
+        return [-0.1, -1.7 + sweep * 0.25];
+      }
+      case 'ballerina': {
+        // 두 팔로 머리 위 동그라미, 천천히 돌며 발끝 서기
+        A.rotation.set(-2.9, 0, -0.32);
+        B.rotation.set(-2.9, 0, 0.32);
+        V.rotation.y = Math.sin(t * 0.9) * 0.6;
+        V.position.y = 0.06 + Math.abs(Math.sin(t * 1.8)) * 0.05;
+        this.legL.rotation.x = -0.5 + Math.sin(t * 1.8) * 0.2;
+        this.legL.userData.shin.rotation.x = 0.9;
+        return [-0.9, -0.9];
       }
       default: {
         // 민수: 멍하니 머리 긁기
@@ -1223,6 +1412,47 @@ export class Character {
       this.visual.rotation.z = Math.sin(t * 23) * 0.18;
       this.head.rotation.y = 0;
       this.head.rotation.x = 0.7;
+    } else if (kind === 'banana') {
+      // 껍질 던지기: 오른팔 크게 휘두르기
+      const s = (t * 1.4) % 1;
+      this.armR.rotation.set(-3 + s * 3.4, 0, -0.2);
+      this.armL.rotation.set(-0.9, 0, 0.5);
+      bendL = -0.6; bendR = -0.3;
+      this.visual.rotation.x = 0;
+      this.visual.rotation.z = 0;
+      this.head.rotation.y = 0;
+    } else if (kind === 'pedro' || (this.danceUntil && performance.now() < this.danceUntil)) {
+      // 페드로 댄스 (당한 사람도 똑같이 춘다)
+      const beat = t * 9;
+      this.armL.rotation.set(-2.6 + Math.sin(beat) * 0.4, 0, 0.6);
+      this.armR.rotation.set(-2.6 - Math.sin(beat) * 0.4, 0, -0.6);
+      bendL = bendR = -0.4;
+      this.visual.rotation.x = 0;
+      this.visual.rotation.z = Math.sin(beat * 0.5) * 0.18;
+      this.visual.position.y = Math.abs(Math.sin(beat)) * 0.14;
+      this.head.rotation.y = Math.sin(beat * 0.5) * 0.4;
+    } else if (kind === 'mew') {
+      // 턱 잡고 위에서 내려다보기
+      this.armR.rotation.set(-2.2, 0, 0.65);
+      this.armL.rotation.set(-1.15, 0, 0.5);
+      this.foreZ[1] = -0.5;
+      bendR = -1.6; bendL = -0.5;
+      this.visual.rotation.x = 0;
+      this.visual.rotation.z = 0;
+      this.head.rotation.x = -this.pitch * 0.55 - 0.2;
+      this.head.rotation.y = 0;
+    } else if (kind === 'ballerina') {
+      // 팔 벌리고 한 발로 팽이
+      this.armL.rotation.set(0, 0, -1.45);
+      this.armR.rotation.set(0, 0, 1.45);
+      bendL = bendR = 0;
+      this.visual.rotation.x = 0;
+      this.visual.rotation.z = 0;
+      this.legL.rotation.x = -1.1;
+      this.legL.userData.shin.rotation.x = 1.2;
+      this.legR.rotation.x = 0;
+      this.legR.userData.shin.rotation.x = 0;
+      this.head.rotation.y = 0;
     } else if (kind === 'toilet') {
       this.armL.rotation.set(0, 0, -1.45);
       this.armR.rotation.set(0, 0, 1.45);
@@ -1254,9 +1484,24 @@ export class Character {
       this.visual.rotation.x = 0;
       const pump = moving ? Math.sin(ph) * 0.09 * runAmt : breath * 0.012;
       const flail = airK * (this.vy < -1 ? Math.sin(t * 16) * 0.22 : 0);
-      this.armR.rotation.set(-1.45 - this.pitch * 0.9 + this.kick * -0.28 + pump + flail, 0, 0);
-      this.armL.rotation.set(-1.15 - this.pitch * 0.9 - pump - airK * 0.5 + flail, 0, 0.5 + airK * 0.3);
-      bendL = -0.5 - this.pitch * 0.2;
+      const wid = this.weaponId;
+      const aimX = -1.45 - this.pitch * 0.9;
+      if (wid === 'dual') {
+        // 쌍권총: 양팔 다 앞으로
+        this.armR.rotation.set(aimX + this.kick * -0.28 + pump + flail, 0, -0.08);
+        this.armL.rotation.set(aimX + (this.kick2 ?? 0) * -0.28 - pump + flail, 0, 0.08);
+        bendL = -0.1 - (this.kick2 ?? 0) * 0.3;
+      } else if (wid === 'six7') {
+        // 리볼버: 한 손으로 겨누고 다른 손은 주먹 쥐고 흔든다
+        this.armR.rotation.set(aimX + this.kick * -0.28 + pump + flail, 0, 0);
+        this.armL.rotation.set(-1.15 - this.pitch * 0.9 - pump - airK * 0.5 + flail, 0, 0.5 + airK * 0.3);
+        bendL = -0.5 - this.pitch * 0.2;
+      } else {
+        // 긴 총: 오른손은 손잡이, 왼손은 앞을 받친다
+        this.armR.rotation.set(aimX + this.kick * -0.2 + pump * 0.5 + flail, 0, -0.16);
+        this.armL.rotation.set(aimX + 0.12 + this.kick * -0.2 + pump * 0.5 + flail, 0, 0.62);
+        bendL = -0.85 - this.pitch * 0.1;
+      }
       bendR = -0.1 - this.kick * 0.3;
       this.visual.rotation.z = 0;
       this.head.rotation.y = -this.twist * 0.8;
@@ -1273,7 +1518,9 @@ export class Character {
       this.visual.rotation.y += -0.5 + k * 0.9;
     }
 
-    this.gun.visible = !this.lobby && this.emote === 0 && !['cat', 'minsu', 'hero', 'chill', 'streamer', 'toilet'].includes(kind);
+    const dancing = this.danceUntil && performance.now() < this.danceUntil;
+    this.gun.visible = !this.lobby && this.emote === 0 && !dancing && !['cat', 'minsu', 'hero', 'chill', 'streamer', 'toilet', 'banana', 'pedro', 'ballerina'].includes(kind);
+    if (this.gun2) this.gun2.visible = this.gun.visible && this.weaponId === 'dual';
 
     // 숙임과 꼬임
     if (!['hero', 'cat', 'toilet'].includes(kind)) {
@@ -1295,6 +1542,8 @@ export class Character {
       });
     }
     if (kind === 'toilet') this.visual.rotation.y = t * 11;
+    if (kind === 'ballerina') this.visual.rotation.y = t * 16;
+    if (this.tears && !this.lobby) for (const d of this.tears) d.scale.y = kind === 'banana' ? 1.6 + Math.sin(t * 9) * 0.4 : 1;
     if (this.whirl) this.whirl.visible = this.whirl2.visible = kind === 'toilet';
     if (kind === 'toilet') {
       this.whirl.rotation.y = -t * 7;
@@ -1309,6 +1558,7 @@ export class Character {
     // 총구 불꽃
     this.flashT -= dt;
     this.kick = Math.max(0, this.kick - dt * 7);
+    this.kick2 = Math.max(0, (this.kick2 ?? 0) - dt * 7);
     this.muzzle.material.opacity = this.flashT > 0 && this.gun.visible ? 1 : 0;
 
     // 아우라

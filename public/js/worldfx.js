@@ -9,7 +9,205 @@ export const LOOK = {
   boat: { sunDir: [0.5, 0.62, 0.6], sunColor: 0xfff0d0, hemiMul: 0.8, sunMul: 1.45, rim: 0xbfe8ff, rimK: 0.4, sunDisc: 0xfff0b0, clouds: 0xffffff, ocean: 0x1d7fa8, motes: 0xffffff },
   restroom: { sunDir: [-0.3, 1, 0.42], sunColor: 0xffffff, hemiMul: 0.66, sunMul: 1.1, rim: 0x9fe0ff, rimK: 0.4, tubes: true, bubbles: true, motes: 0xbfeaff },
   arena: { sunDir: [-0.55, 0.62, 0.5], sunColor: 0xffe2b0, hemiMul: 0.78, sunMul: 1.55, rim: 0xffc070, rimK: 0.45, sunDisc: 0xfff0c0, clouds: 0xffeed8, torches: true, motes: 0xe8cc90 },
+  school: { sunDir: [0.45, 0.8, 0.5], sunColor: 0xfff1d0, hemiMul: 0.78, sunMul: 1.3, rim: 0xffe0a0, rimK: 0.38, noCast: ['ceil'], sunDisc: 0xfff0c0, clouds: 0xffffff, fluoro: { lamp: [2.7, 2.65, 2.4], pool: 0xfff4d8, cones: true }, props: 'school', motes: 0xfff2c0 },
+  mart: { sunDir: [0.25, 1, -0.3], sunColor: 0xf4fbff, hemiMul: 0.74, sunMul: 1.05, rim: 0xbfe8ff, rimK: 0.42, noCast: ['ceil'], neon: { freezer: 0x40d8ff, counter: 0xff3b6b }, fluoro: { lamp: [2.5, 2.75, 3], pool: 0xe8f6ff }, frost: true, props: 'mart', motes: 0xd8f4ff },
 };
+
+// [x0,y0,z0,x1,y1,z1,색] 상자들을 정점색 한 덩어리로 (그리기 1번)
+function colorBoxes(list, mat) {
+  const c = new THREE.Color();
+  const parts = list.map(([x0, y0, z0, x1, y1, z1, col]) => {
+    const g = new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0).translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+    c.set(col);
+    const n = g.attributes.position.count, a = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
+    g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+    return g;
+  });
+  return new THREE.Mesh(mergeBoxes(parts), mat ?? new THREE.MeshLambertMaterial({ vertexColors: true }));
+}
+
+// 아래로 가장 가까운 바닥 높이 (천장은 뺀다)
+function floorBelow(map, x, z, y) {
+  let top = 0;
+  for (const b of map.boxes) {
+    if (x > b.min[0] && x < b.max[0] && z > b.min[2] && z < b.max[2] && b.max[1] < y - 0.2 && b.max[1] > top) top = b.max[1];
+  }
+  return top;
+}
+
+// 매달린 양면 표지판 여러 장을 글자 아틀라스 하나로: [[줄], 바탕, 글자, x, y, z, 회전, 폭]
+function hangSigns(list, own, ceilY) {
+  const N = list.length, W = 512, H = 256;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H * N;
+  const x = c.getContext('2d');
+  const parts = [], rods = [];
+  list.forEach(([lines, bg, fg, px, py, pz, rot, w], i) => {
+    const y0 = i * H;
+    x.fillStyle = bg;
+    x.fillRect(0, y0, W, H);
+    x.strokeStyle = fg;
+    x.lineWidth = 12;
+    x.strokeRect(8, y0 + 8, W - 16, H - 16);
+    x.fillStyle = fg;
+    x.textAlign = 'center';
+    x.textBaseline = 'middle';
+    lines.forEach((l, k) => {
+      let size = 150 / lines.length;
+      x.font = `900 ${size}px Impact, "Malgun Gothic", "Segoe UI Emoji", sans-serif`;
+      const tw = x.measureText(l).width;
+      if (tw > 440) { size *= 440 / tw; x.font = `900 ${size}px Impact, "Malgun Gothic", "Segoe UI Emoji", sans-serif`; }
+      x.fillText(l, W / 2, y0 + H / 2 + (k - (lines.length - 1) / 2) * (200 / lines.length));
+    });
+    const v0 = 1 - (i + 1) / N, v1 = 1 - i / N;
+    for (const flip of [0, Math.PI]) {
+      const g = new THREE.PlaneGeometry(w, w / 2);
+      const uv = g.attributes.uv;
+      for (let j = 0; j < uv.count; j++) uv.setY(j, uv.getY(j) ? v1 : v0);
+      g.translate(0, 0, 0.012).rotateY(rot + flip).translate(px, py, pz);
+      parts.push(g);
+    }
+    if (ceilY !== undefined) {
+      const top = py + w / 4;
+      for (const s of [-1, 1]) {
+        const ox = Math.cos(rot) * s * w * 0.38, oz = -Math.sin(rot) * s * w * 0.38;
+        rods.push([px + ox - 0.03, top, pz + oz - 0.03, px + ox + 0.03, ceilY, pz + oz + 0.03, '#4a4f57']);
+      }
+    }
+  });
+  const tex = own(new THREE.CanvasTexture(c));
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(mergeBoxes(parts), new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(1.05, 1.05, 1.05) })));
+  if (rods.length) g.add(colorBoxes(rods));
+  return g;
+}
+
+// 급식실 소품: 식판, 배식 반찬통, 의자 등받이, 반 표지판
+function schoolProps(map, s, own) {
+  const L = [];
+  const FOOD = ['#ffffff', '#e8442a', '#f2a93b', '#7ac74f', '#8a4b2a'];
+  for (const b of map.boxes) {
+    if (b.kind === 'table' && b.max[0] - b.min[0] > 6) {
+      // 식판: 식탁 양쪽으로
+      const y = b.max[1];
+      for (let tx = b.min[0] + 1; tx < b.max[0] - 0.5; tx += 2.2) {
+        for (const side of [-1, 1]) {
+          const cz = (b.min[2] + b.max[2]) / 2 + side * 0.36;
+          L.push([tx - 0.3, y, cz - 0.2, tx + 0.3, y + 0.035, cz + 0.2, '#9fc7b0']);
+          L.push([tx - 0.24, y + 0.035, cz - 0.14, tx - 0.04, y + 0.12, cz + 0.04, FOOD[0]]);
+          L.push([tx + 0.02, y + 0.035, cz - 0.14, tx + 0.24, y + 0.09, cz + 0.14, FOOD[1 + ((tx * 3 + side) & 3)]]);
+        }
+      }
+    }
+    if (b.kind === 'desk' && b.max[1] < 0.5 && b.max[0] - b.min[0] < 1) {
+      // 교실 의자 등받이 (의자 뒤쪽 끝)
+      L.push([b.min[0] + 0.04, b.max[1], b.min[2], b.max[0] - 0.04, b.max[1] + 0.55, b.min[2] + 0.06, '#8a5a2c']);
+    }
+    if (b.kind === 'desk' && b.max[1] === 0.85) {
+      // 책상 상판: 밝은 나무, 살짝 튀어나오게
+      L.push([b.min[0] - 0.04, 0.85, b.min[2] - 0.04, b.max[0] + 0.04, 0.89, b.max[2] + 0.04, '#e8c79a']);
+    }
+  }
+  // 배식대 반찬통과 국통
+  const BAN = ['#ffffff', '#e8442a', '#f2a93b', '#7ac74f', '#ff9ec7', '#e8442a', '#ffffff', '#f2d24b'];
+  BAN.forEach((col, i) => {
+    const x0 = -14 + i * 3.5;
+    L.push([x0, 1.2, -20.9, x0 + 3, 1.24, -19.9, '#d8dee3']);
+    L.push([x0 + 0.15, 1.24, -20.75, x0 + 2.85, 1.3, -20.05, col]);
+  });
+  for (const sx of [-1, 1]) {
+    L.push([sx * 8 - 1.3, 1.8, -26, sx * 8 + 1.3, 2.9, -24.2, '#9aa6b0']);
+    L.push([sx * 8 - 1.1, 2.9, -25.8, sx * 8 + 1.1, 2.94, -24.4, '#f2a93b']);
+  }
+  // 배식대 가림막 기둥
+  for (let x = -15; x <= 15; x += 5) L.push([x - 0.05, 1.2, -20.55, x + 0.05, 2, -20.45, '#aab4bc']);
+  s.add(colorBoxes(L));
+  // 가림막 유리
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(30, 0.04, 0.9).translate(0, 2, -20.4), new THREE.MeshBasicMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.35, depthWrite: false }));
+  s.add(glass);
+  // 반 표지판: 문 위에서 복도 쪽으로 튀어나온다 (6반, 7반 = 67)
+  s.add(hangSigns([
+    [['1-6'], '#fff', '#1f4d34', -18.5, 4.15, 9.2, Math.PI / 2, 1.6],
+    [['1-6'], '#fff', '#1f4d34', -9.5, 4.15, 9.2, Math.PI / 2, 1.6],
+    [['1-7'], '#fff', '#1f4d34', 9.5, 4.15, 9.2, Math.PI / 2, 1.6],
+    [['1-7'], '#fff', '#1f4d34', 18.5, 4.15, 9.2, Math.PI / 2, 1.6],
+  ], own));
+  // 급식실 천장에 매단 표지판
+  s.add(hangSigns([
+    [['배식구', '↓↓↓'], '#d62828', '#fff', -10.5, 6.6, -20.4, 0, 3.6],
+    [['배식구', '↓↓↓'], '#d62828', '#fff', 10.5, 6.6, -20.4, 0, 3.6],
+    [['매점 털러', '가자'], '#ffd21f', '#14002e', -12.5, 7.4, -0.5, 0, 4],
+    [['AURA', '맛집'], '#14002e', '#ff5fa2', 12.5, 7.4, -0.5, 0, 4],
+  ], own, 10));
+}
+
+// 마트 소품: 진열 상품, 냉동고 문, 계산대, 하역장 줄무늬
+function martProps(map, s, own) {
+  const L = [], G = [];
+  const RUNS = ['#ff4040', '#ffd21f', '#3fa9f5', '#7ac74f', '#ff8a1f', '#ffffff', '#b06cff', '#ff5fa2', '#20c4b0', '#f2e6c8'];
+  let seed = 67;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (const b of map.boxes) {
+    if (b.kind === 'shelf') {
+      for (const [fx, dir] of [[b.min[0], -1], [b.max[0], 1]]) {
+        for (const ly of [0.12, 1.12, 2.12, 3.12]) {
+          // 선반 턱
+          L.push([Math.min(fx, fx + dir * 0.2), ly, b.min[2] + 0.05, Math.max(fx, fx + dir * 0.2), ly + 0.07, b.max[2] - 0.05, '#e8edf2']);
+          if (ly > 3) continue;
+          // 같은 상품 한 줄을 상자 하나로 (삼각형 아끼기)
+          let z = b.min[2] + 0.15;
+          while (z < b.max[2] - 0.6) {
+            const w = Math.min(0.9 + rnd() * 1.6, b.max[2] - 0.15 - z), h = 0.4 + rnd() * 0.45;
+            L.push([Math.min(fx, fx + dir * 0.17), ly + 0.07, z, Math.max(fx, fx + dir * 0.17), ly + 0.07 + h, z + w, RUNS[(rnd() * RUNS.length) | 0]]);
+            z += w + 0.08;
+          }
+        }
+      }
+    }
+    if (b.kind === 'counter') {
+      const cx = (b.min[0] + b.max[0]) / 2;
+      L.push([cx - 0.45, b.max[1], b.min[2] + 0.3, cx + 0.45, b.max[1] + 0.03, b.max[2] - 1.6, '#2a2d33']);
+      L.push([cx - 0.35, b.max[1], b.max[2] - 1.3, cx + 0.35, b.max[1] + 0.32, b.max[2] - 0.6, '#3a3f48']);
+      L.push([cx - 0.04, b.max[1], b.max[2] - 0.2, cx + 0.04, 2.9, b.max[2] - 0.12, '#4a4f57']);
+      G.push([cx - 0.28, 2.9, b.max[2] - 0.3, cx + 0.28, 3.3, b.max[2] - 0.02, '#ffe14d']);
+      G.push([cx - 0.3, b.max[1] + 0.32, b.max[2] - 1.28, cx + 0.3, b.max[1] + 0.33, b.max[2] - 0.62, '#7fe0ff']);
+    }
+  }
+  // 벽 냉장고 유리문 (빛나는 판)과 손잡이
+  for (let x = -18.85; x < -5.3; x += 1.36) {
+    G.push([x, 0.3, -26.8, x + 1.26, 2.75, -26.76, '#bff0ff']);
+    L.push([x + 1.08, 1.1, -26.76, x + 1.13, 2, -26.7, '#5a6470']);
+  }
+  // 아이스크림 냉동고 유리 뚜껑
+  for (const b of map.boxes.filter((q) => q.kind === 'freezer' && q.max[1] === 1)) {
+    G.push([b.min[0] + 0.15, 1, b.min[2] + 0.15, b.max[0] - 0.15, 1.02, b.max[2] - 0.15, '#9fe8ff']);
+  }
+  // 워크인 냉동고 비닐 커튼: 지나갈 때 흔들리는 느낌만
+  for (let z = -23.95; z < -22.05; z += 0.24) L.push([-19.34, 0.15, z, -19.32, 2.6, z + 0.18, '#d8f2ff']);
+  // 하역장 가장자리 노랑/검정 줄무늬와 고무 범퍼
+  for (let x = 4; x < 27.9; x += 0.8) {
+    const stair = (x > 4.9 && x < 9.1) || (x > 22.9 && x < 27.1);
+    if (!stair) L.push([x, 1.12, -19.02, Math.min(28, x + 0.8), 1.5, -18.99, ((x - 4) / 0.8) % 2 < 1 ? '#ffcc00' : '#1a1a1a']);
+  }
+  for (const x of [11, 20.5]) L.push([x - 0.3, 0.3, -19.18, x + 0.3, 1.05, -19, '#1a1a1a']);
+  // 트럭: 빨간 띠
+  L.push([11.97, 3.6, -28, 12, 3.9, -21.2, '#d63a3a'], [19, 3.6, -28, 19.03, 3.9, -21.2, '#d63a3a']);
+  s.add(colorBoxes(L));
+  s.add(colorBoxes(G, new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(1.5, 1.5, 1.5) })));
+  // 통로 표지판
+  s.add(hangSigns([
+    [['라면'], '#ff4040', '#fff', -18.25, 7.6, 4.5, 0, 3.4],
+    [['과자'], '#ffd21f', '#14002e', -12.75, 7.6, 4.5, 0, 3.4],
+    [['음료'], '#3fa9f5', '#fff', -7.25, 7.6, 4.5, 0, 3.4],
+    [['밈 코너'], '#14002e', '#ff5fa2', 7.25, 7.6, 4.5, 0, 3.4],
+    [['시그마', '단백질'], '#111', '#ffd700', 12.75, 7.6, 4.5, 0, 3.4],
+    [['67%', 'SALE'], '#fff', '#d00', 18.25, 7.6, 4.5, 0, 3.4],
+    [['CHECKOUT', '계산대'], '#e8384f', '#fff', 0, 7.2, 16.2, 0, 5],
+  ], own, 10));
+}
 
 // 박스 모서리 네온
 function neonBars(boxes, colors) {
@@ -293,6 +491,54 @@ export function decorateWorld(game, map, s, own) {
         acc = 0;
         effects.burst([(Math.random() - 0.5) * 11, -13, (Math.random() - 0.5) * 11], { n: 1, speed: 0.5, up: 6, color: 0xff7030, size: 0.22, life: 2.2, hdr: 2.4, drag: 0.2 });
       }
+    });
+  }
+
+  // 형광등: 바닥 빛 웅덩이와 빛 원뿔을 각각 한 덩어리로
+  if (look.fluoro) {
+    const f = look.fluoro;
+    if (game.lampMat) game.lampMat.color.setRGB(...f.lamp);
+    const pools = [], cones = [];
+    for (const b of map.decor) {
+      if (b.kind !== 'lamp') continue;
+      const x = (b.min[0] + b.max[0]) / 2, z = (b.min[2] + b.max[2]) / 2;
+      const sx = b.max[0] - b.min[0], sz = b.max[2] - b.min[2];
+      const y = floorBelow(map, x, z, b.min[1]);
+      const r = Math.min(4.2, 1.8 + Math.max(sx, sz) * 0.22);
+      pools.push(new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2).scale(r + sx * 0.3, 1, r + sz * 0.3).translate(x, y + 0.03, z));
+      if (f.cones) {
+        const h = b.min[1] - y;
+        cones.push(new THREE.CylinderGeometry(0.6, 1.9, h, 12, 1, true).scale(1 + sx * 0.3, 1, 1 + sz * 0.3).translate(x, y + h / 2, z));
+      }
+    }
+    if (pools.length) {
+      s.add(new THREE.Mesh(mergeBoxes(pools), new THREE.MeshBasicMaterial({ map: softTexture(), color: f.pool, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })));
+    }
+    if (cones.length) s.add(new THREE.Mesh(mergeBoxes(cones), coneMaterial(new THREE.Color(f.pool), 0.08)));
+  }
+
+  // 맵별 소품 (충돌 없음)
+  if (look.props === 'school') schoolProps(map, s, own);
+  if (look.props === 'mart') martProps(map, s, own);
+
+  // 냉동 코너: 냉동고에서 찬 김이 흘러내리고, 바닥에 푸른 빛
+  if (look.frost) {
+    // 키 큰 벽 냉장고는 앞쪽 바닥, 낮은 냉동고는 뚜껑 위
+    const spots = map.boxes.filter((b) => b.kind === 'freezer' && b.max[1] <= 3).map((b) => ({ b, tall: b.max[1] > 2 }));
+    for (const { b, tall } of spots) {
+      const cx = (b.min[0] + b.max[0]) / 2, cz = tall ? b.max[2] + 1.4 : (b.min[2] + b.max[2]) / 2;
+      s.add(lightPool(cx, 0, cz, (b.max[0] - b.min[0]) * 0.45, 0x60d8ff, 0.3));
+    }
+    let acc = 0;
+    updaters.push((t, dt) => {
+      acc += dt;
+      if (acc < 0.12) return;
+      acc = 0;
+      const { b, tall } = spots[Math.floor(Math.random() * spots.length)];
+      const px = b.min[0] + Math.random() * (b.max[0] - b.min[0]);
+      const py = tall ? 0.4 + Math.random() * 2 : b.max[1] + 0.05;
+      const pz = tall ? b.max[2] + 0.2 : b.min[2] + Math.random() * (b.max[2] - b.min[2]);
+      effects.burst([px, py, pz], { n: 2, speed: 0.35, up: -0.25, color: 0xe4f8ff, size: 0.55, size2: 1.1, life: 1.8, additive: false, alpha: 0.38, drag: 1.2, spread: 0.3 });
     });
   }
 

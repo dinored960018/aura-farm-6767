@@ -108,9 +108,12 @@ export class Hud {
     }
   }
 
-  // 위쪽 점수판: 킬 순서대로
+  // 위쪽 점수판: 상위 3명 + 나. 전체는 Tab
   renderScores(g) {
-    const rows = [...g.scores].sort((a, b) => b.k - a.k);
+    const all = [...g.scores].sort((a, b) => b.k - a.k || a.d - b.d);
+    const rows = all.slice(0, 3);
+    const mine = all.find((r) => r.id === g.myId);
+    if (mine && !rows.includes(mine)) rows.push(mine);
     const key = rows.map((r) => `${r.id}:${r.k}`).join(',');
     if (this.prev.scores === key) return;
     this.prev.scores = key;
@@ -126,6 +129,40 @@ export class Hud {
       chip.append(n, b);
       return chip;
     }));
+  }
+
+  // Tab 점수판: 순위, 얼굴, 이름, 킬, 데스
+  renderBoard(g) {
+    const box = document.getElementById('board');
+    if (!box) return;
+    const rows = [...g.scores].sort((a, b) => b.k - a.k || a.d - b.d);
+    const list = box.querySelector('ol');
+    list.replaceChildren(...rows.map((r, i) => {
+      const li = document.createElement('li');
+      li.className = r.id === g.myId ? 'me' : '';
+      const rank = document.createElement('b');
+      rank.className = 'bRank';
+      rank.textContent = i + 1;
+      const n = document.createElement('span');
+      n.className = 'bName';
+      n.textContent = this.names.get(r.id) ?? '???';
+      const k = document.createElement('b');
+      k.className = 'bK';
+      k.textContent = r.k;
+      const d = document.createElement('b');
+      d.className = 'bD';
+      d.textContent = r.d;
+      li.append(rank);
+      const skin = g.chars.get(r.id)?.skinId;
+      if (skin) li.append(faceEl(skin, 'chipFace'));
+      li.append(n, k, d);
+      return li;
+    }));
+  }
+
+  showBoard(on) {
+    const box = document.getElementById('board');
+    if (box) box.hidden = !on;
   }
 
   hitmarker(head) {

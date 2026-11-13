@@ -4,6 +4,7 @@ import { Player } from './player.js';
 import { SKIN_IDS, TICK_HZ } from '../shared/constants.js';
 import { cleanText } from '../shared/filter.js';
 import { cleanLook } from '../shared/cosmetics.js';
+import { cleanLoadout } from '../shared/constants.js';
 
 class HumanPlayer extends Player {
   constructor(id, name, skin, rawSend) {
@@ -53,6 +54,13 @@ export function createHub({ timings = {}, autoTick = true } = {}) {
         p.name = cleanName(m.name, p.name);
         if (SKIN_IDS.includes(m.skin)) p.skin = m.skin;
         p.look = cleanLook(m.look);
+        if (m.loadout) p.loadout = cleanLoadout(m.loadout);
+        break;
+      case 'loadout':
+        // 무기는 대기실에서만 바꾼다
+        if (r && r.state !== 'lobby') break;
+        p.loadout = cleanLoadout(m.loadout);
+        if (r) r.sendRoom();
         break;
       case 'look':
         // 꾸미기는 대기실에서만 바뀐다 (경기 중 캐릭터를 다시 만들지 않게)

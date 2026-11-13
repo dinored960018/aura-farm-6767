@@ -1,8 +1,11 @@
-// 방 하나 = 대기실 + 경기 1판 (개인전, 2~4명). 서버가 체력·킬·아우라·판정을 전부 결정한다.
+// 순위: 킬이 많을수록, 같으면 덜 죽은 사람, 그래도 같으면 아우라
+const rank = (a, b) => b.kills - a.kills || (a.stats.deaths ?? 0) - (b.stats.deaths ?? 0) || Math.round(b.aura) - Math.round(a.aura);
+
+// 방 하나 = 대기실 + 경기 1판 (5분 데스매치, 2~6명). 서버가 체력·킬·아우라·판정을 전부 결정한다.
 import {
   MODES,
-  TICK_HZ, MAX_HP, WIN_KILLS, MATCH_SECONDS, AURA_MAX, INTERP_MS, MAX_PLAYERS,
-  WEAPONS, LASER, SLAP, AURA, CHICKEN_HEAL, BOMB, NUKE, FALLOUT, SIGMA, CAT, FLUSH, BARK, HERO, CHILL, TUNG, RIZZ, ULTRAS, EVENTS, EVENT_IDS, PLAYER, DEFAULT_TIMINGS, SKIN_IDS,
+  TICK_HZ, MAX_HP, MATCH_SECONDS, PEEL, PEDRO, MEW, SPIN, AURA_MAX, INTERP_MS, MAX_PLAYERS,
+  WEAPONS, PRIMARY_IDS, SECONDARY_IDS, LASER, SLAP, AURA, CHICKEN_HEAL, BOMB, NUKE, FALLOUT, SIGMA, CAT, FLUSH, BARK, HERO, CHILL, TUNG, RIZZ, ULTRAS, EVENTS, EVENT_IDS, PLAYER, DEFAULT_TIMINGS, SKIN_IDS,
 } from '../shared/constants.js';
 import { MAPS, MAP_IDS, DEFAULT_MAP, pickSpawn, rayWorld, rayPlayer, groundAt } from '../shared/map.js';
 import { Bot } from './bot.js';
@@ -31,6 +34,7 @@ export class Room {
     this.bombs = [];
     this.nukes = [];
     this.fallouts = [];
+    this.peels = [];
     this.event = null;
     this.nextEventAt = 0;
     // 공개 방: 모르는 사람이 경기 중에도 봇 자리로 들어오고, 경기가 끝나면 알아서 다음 판이 시작된다
@@ -177,6 +181,9 @@ export class Room {
     const used = new Set(this.players.map((p) => p.name));
     const names = BOT_NAMES.filter((n) => !used.has(n));
     const bot = new Bot(this.hub.nextId(), names[Math.floor(Math.random() * names.length)], SKIN_IDS[Math.floor(Math.random() * SKIN_IDS.length)]);
+    const pickOne = (a) => a[Math.floor(Math.random() * a.length)];
+    bot.loadout = { p: pickOne(PRIMARY_IDS), s: pickOne(SECONDARY_IDS) };
+    bot.weapon = bot.loadout.p;
     bot.room = this;
     bot.ready = true;
     bot.wins = 0;
@@ -263,8 +270,9 @@ export class Room {
     this.bombs = [];
     this.nukes = [];
     this.fallouts = [];
+    this.peels = [];
     this.nextEventAt = now + this.t.countdownMs + this.t.eventFirstMs;
-    this.matchEndsAt = now + this.t.countdownMs + MATCH_SECONDS * 1000;
+    this.matchEndsAt = now + this.t.countdownMs + (this.t.matchMs ?? MATCH_SECONDS * 1000);
     this.pickups = this.map.pickups.map((p) => ({ ...p, active: true, respawnAt: 0 }));
 
     const taken = [];
@@ -360,6 +368,13 @@ export class Room {
       if (this.state !== 'playing') return;
       if (p.alive && p.ultraKind === 'rizz') this.tickRizz(p, now);
       if (this.state !== 'playing') return;
+      if (p.alive && p.ultraKind === 'banana') this.tickBanana(p, now);
+      if (p.alive && p.ultraKind === 'pedro') this.tickPedro(p, now);
+      if (this.state !== 'playing') return;
+      if (p.alive && p.ultraKind === 'mew') this.tickMew(p, now);
+      if (this.state !== 'playing') return;
+      if (p.alive && p.ultraKind === 'ballerina') this.tickSpin(p, now);
+      if (this.state !== 'playing') return;
       if (p.alive && p.ultraKind === 'chill') p.hp = Math.min(MAX_HP, round(p.hp + CHILL.regenPerSec * dt));
       if (p.alive && p.emote === 1 && now - p.movedAt > 150) {
         this.addAura(p, AURA.farmPerSec * dt, null);
@@ -381,6 +396,7 @@ export class Room {
     this.tickNukes(now);
     if (this.state !== 'playing') return;
     this.tickFallouts(now);
+    if (this.state === 'playing') this.tickPeels(now);
     if (this.state !== 'playing') return;
     this.tickEvents(now);
     if (now >= this.matchEndsAt) this.endByTime();
@@ -469,6 +485,14 @@ export class Room {
         q.slowUntil = now + def.ms;
         this.broadcast({ t: 'slow', id: p.id, to: q.id, ms: def.ms });
       }
+    } else if (kind === 'pedro') {
+      for (const q of this.others(p)) {
+        if (!q.alive || Math.hypot(q.pos[0] - p.pos[0], q.pos[2] - p.pos[2]) > PEDRO.radius) continue;
+        q.charmUntil = now + def.ms;
+        q.charmBy = null;
+        q.danceBy = p;
+        this.broadcast({ t: 'dance', id: p.id, to: q.id, ms: def.ms });
+      }
     } else if (kind === 'rizz') {
       for (const q of this.others(p)) {
         if (!q.alive || Math.hypot(q.pos[0] - p.pos[0], q.pos[2] - p.pos[2]) > RIZZ.radius) continue;
@@ -510,6 +534,90 @@ export class Room {
     }
   }
 
+  // 바나나 고양이: 앞쪽으로 껍질을 뿌린다. 껍질은 각성이 끝나도 한동안 남는다
+  tickBanana(p, now) {
+    if (now < p.ultraTick || (p.waveN ?? 0) >= PEEL.count) return;
+    p.ultraTick = now + PEEL.everyMs;
+    p.waveN = (p.waveN ?? 0) + 1;
+    const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
+    const side = (Math.random() - 0.5) * 6;
+    const dist = 3 + p.waveN * 1.6;
+    let pos = [p.pos[0] + fx * dist + fz * side, p.pos[1] + 0.5, p.pos[2] + fz * dist - fx * side];
+    const g = groundAt(this.map, pos[0], pos[2], pos[1] + 2);
+    pos = [round(pos[0]), round(g ?? p.pos[1]), round(pos[2])];
+    this.peels.push({ pos, owner: p, until: now + PEEL.lifeMs });
+    this.broadcast({ t: 'peel', id: p.id, from: p.pos.map(round), pos });
+  }
+
+  tickPeels(now) {
+    if (!this.peels.length) return;
+    this.peels = this.peels.filter((k) => now < k.until && !k.used);
+    for (const k of this.peels) {
+      for (const q of this.players) {
+        if (q === k.owner || !q.alive || q.cat) continue;
+        if (Math.hypot(q.pos[0] - k.pos[0], q.pos[2] - k.pos[2]) > PEEL.radius || Math.abs(q.pos[1] - k.pos[1]) > 1.6) continue;
+        k.used = true;
+        q.slowUntil = Math.max(q.slowUntil ?? 0, now + PEEL.slowMs);
+        this.broadcast({ t: 'slip', to: q.id, pos: k.pos });
+        this.knock(q, [(Math.random() - 0.5) * 10, 13, (Math.random() - 0.5) * 10]);
+        this.damage(q, this.players.includes(k.owner) ? k.owner : null, PEEL.damage, { weapon: 'peel', head: false, env: true, pos: q.pos });
+        if (this.state !== 'playing') return;
+        break;
+      }
+    }
+  }
+
+  // 페드로: 춤추는 사람들 체력이 조금씩 깎인다
+  tickPedro(p, now) {
+    if (now < p.ultraTick) return;
+    p.ultraTick = now + PEDRO.tickMs;
+    for (const q of this.others(p)) {
+      if (!q.alive || q.danceBy !== p || now >= q.charmUntil) continue;
+      this.damage(q, p, PEDRO.damage, { weapon: 'pedro', head: false, env: true, pos: q.pos });
+      if (this.state !== 'playing') return;
+    }
+  }
+
+  // 뮤잉남: 바라보는 쪽 원뿔 안, 벽에 안 가린 상대를 모깅
+  tickMew(p, now) {
+    if (now < p.ultraTick) return;
+    p.ultraTick = now + MEW.tickMs;
+    const cp = Math.cos(p.pitch ?? 0);
+    const f = [-Math.sin(p.yaw) * cp, Math.sin(p.pitch ?? 0), -Math.cos(p.yaw) * cp];
+    const eye = [p.pos[0], p.pos[1] + PLAYER.eye, p.pos[2]];
+    const hit = [];
+    for (const q of this.others(p)) {
+      if (!q.alive || now < q.invulnUntil) continue;
+      const to = [q.pos[0] - eye[0], q.pos[1] + 1.2 - eye[1], q.pos[2] - eye[2]];
+      const d = Math.hypot(to[0], to[1], to[2]) || 1;
+      if (d > MEW.range || (to[0] * f[0] + to[1] * f[1] + to[2] * f[2]) / d < MEW.cone) continue;
+      if (rayWorld(this.map, eye, [to[0] / d, to[1] / d, to[2] / d], d) < d - 0.05) continue;
+      hit.push(q);
+    }
+    this.broadcast({ t: 'mog', id: p.id, to: hit.map((q) => q.id) });
+    for (const q of hit) {
+      const stolen = Math.min(q.aura, MEW.auraDrain);
+      if (stolen > 0) { this.addAura(q, -stolen, null); this.addAura(p, stolen, null); }
+      this.damage(q, p, MEW.damage, { weapon: 'mew', head: false, env: true, pos: q.pos });
+      if (this.state !== 'playing') return;
+    }
+  }
+
+  // 발레리나: 돌면서 닿는 놈 갈기
+  tickSpin(p, now) {
+    if (now < p.ultraTick) return;
+    p.ultraTick = now + SPIN.tickMs;
+    for (const q of this.others(p)) {
+      if (!q.alive || now < q.invulnUntil) continue;
+      const dx = q.pos[0] - p.pos[0], dz = q.pos[2] - p.pos[2];
+      const d = Math.hypot(dx, dz) || 1;
+      if (d > SPIN.radius || Math.abs(q.pos[1] - p.pos[1]) > 2) continue;
+      this.knock(q, [dx / d * SPIN.knock, 8, dz / d * SPIN.knock]);
+      this.damage(q, p, SPIN.damage, { weapon: 'spin', head: false, env: true, pos: q.pos });
+      if (this.state !== 'playing') return;
+    }
+  }
+
   // 리즈왕: 코앞까지 걸어온 상대의 아우라와 체력을 뺏는다
   tickRizz(p, now) {
     if (now < p.rizzTick) return;
@@ -540,10 +648,10 @@ export class Room {
     }
   }
 
-  nearestAlive(p) {
+  nearestAlive(p, skip = null) {
     let best = null, bestD = Infinity;
     for (const o of this.others(p)) {
-      if (!o.alive) continue;
+      if (!o.alive || o === skip) continue;
       const d = Math.hypot(o.pos[0] - p.pos[0], o.pos[1] - p.pos[1], o.pos[2] - p.pos[2]);
       if (d < bestD) { bestD = d; best = o; }
     }
@@ -554,10 +662,12 @@ export class Room {
   tickCat(p, now, dt) {
     const c = p.cat;
     if (c.punch) { this.tickHero(p, c, now, dt); return; }
+    if (now < (c.stunUntil ?? 0)) { p.movedAt = now; p.pushHistory(now); return; }
     if (!c.target || !c.target.alive) {
       if (c.latched) this.broadcast({ t: 'cat', id: p.id, to: null });
       c.latched = false;
-      c.target = this.nearestAlive(p);
+      const avoid = now < (c.avoidUntil ?? 0) ? c.avoid : null;
+      c.target = this.nearestAlive(p, avoid) ?? this.nearestAlive(p);
       if (!c.target) return;
     }
     const t = c.target;
@@ -568,14 +678,17 @@ export class Room {
       const move = CAT.flySpeed * dt;
       if (d <= Math.max(CAT.latchRange, move)) {
         c.latched = true;
-        c.nextTick = now;
+        c.nextTick = now + CAT.tickMs;
         this.broadcast({ t: 'cat', id: p.id, to: t.id });
+        // 덮치는 순간 한 방
+        this.damage(t, p, CAT.pounce, { weapon: 'claw', head: false, env: true, pos: t.pos });
+        if (!t.alive) { c.latched = false; c.target = null; }
       } else {
         p.pos = [p.pos[0] + (to[0] / d) * move, p.pos[1] + (to[1] / d) * move, p.pos[2] + (to[2] / d) * move];
         p.yaw = Math.atan2(-to[0], -to[2]);
       }
     }
-    if (c.latched) {
+    if (c.latched && c.target) {
       const s = Math.sin(t.yaw), k = Math.cos(t.yaw);
       p.pos = [t.pos[0] - s * 0.55, t.pos[1] + 0.55, t.pos[2] - k * 0.55];
       p.yaw = t.yaw + Math.PI;
@@ -738,7 +851,7 @@ export class Room {
     }
     if (!p.cat) p.yaw = msg.y;
     p.pitch = Math.max(-1.6, Math.min(1.6, msg.pi));
-    if (WEAPONS[msg.w]) p.weapon = msg.w;
+    if (msg.w === p.loadout.p || msg.w === p.loadout.s) p.weapon = msg.w;
     const em = !p.cat && (msg.e === 1 || msg.e === 2) ? msg.e : 0;
     if (em === 2 && p.emote !== 2 && now - p.lastSixSeven > 2000) {
       p.lastSixSeven = now;
@@ -765,7 +878,8 @@ export class Room {
 
   onShoot(p, msg) {
     if (!this.isPlaying() || !p.alive || p.cat || this.disabled(p, Date.now())) return;
-    const w = msg.w === LASER.id ? (p.ultraKind === 'minsu' ? LASER : null) : WEAPONS[msg.w];
+    const own = msg.w === p.loadout.p || msg.w === p.loadout.s;
+    const w = msg.w === LASER.id ? (p.ultraKind === 'minsu' ? LASER : null) : own ? WEAPONS[msg.w] : null;
     if (!w || !validVec(msg.o) || !Array.isArray(msg.dirs) || msg.dirs.length === 0 || msg.dirs.length > w.pellets) return;
     const now = Date.now();
     const sigma = p.ultraKind === 'sigma';
@@ -819,6 +933,24 @@ export class Room {
       if (this.state !== 'playing') return;
       this.damage(tg.player, p, tg.total, { weapon: w.id, head: tg.head, pos: tg.pos });
     }
+    if (w.splash && ends.length) this.iceBlast(p, ends[0], w.splash, struck.map((tg) => tg.player));
+  }
+
+  // 드라이아이스: 터진 자리 주변을 얼려서 데미지 + 느리게
+  iceBlast(p, at, sp, direct) {
+    const now = Date.now();
+    this.broadcast({ t: 'ice', id: p.id, pos: at, radius: sp.radius });
+    for (const q of this.others(p)) {
+      if (!q.alive || this.state !== 'playing') continue;
+      const d = Math.hypot(q.pos[0] - at[0], q.pos[1] + 0.9 - at[1], q.pos[2] - at[2]);
+      if (d > sp.radius) continue;
+      const k = 1 - d / sp.radius;
+      const dmg = sp.damage * (0.35 + 0.65 * k) * (direct.includes(q) ? 0.5 : 1);
+      this.damage(q, p, dmg, { weapon: 'ice', head: false, env: true, pos: q.pos });
+      if (!q.alive) continue;
+      q.slowUntil = Math.max(q.slowUntil ?? 0, now + sp.slowMs);
+      this.broadcast({ t: 'slow', id: p.id, to: q.id, ms: sp.slowMs, ice: true });
+    }
   }
 
   onSlap(p, msg) {
@@ -832,9 +964,17 @@ export class Room {
     // 얼굴에 붙은 고양이는 무조건 떨어진다
     const clinger = this.players.find((q) => q.cat?.latched && q.cat.target === p);
     if (clinger) {
-      this.endUltra(clinger, true);
-      this.knock(clinger, [(clinger.pos[0] - p.pos[0]) * 6, 9, (clinger.pos[2] - p.pos[2]) * 6]);
-      this.damage(clinger, p, SLAP.damage, { weapon: 'slap', head: false, pos: clinger.pos });
+      // 떼어내면 잠깐 기절했다가 다른 놈에게 간다. 싸대기 때린 사람은 한동안 안 노린다
+      const c = clinger.cat;
+      c.latched = false;
+      c.target = null;
+      c.stunUntil = now + CAT.slapStunMs;
+      c.avoid = p;
+      c.avoidUntil = now + 2500;
+      const s = Math.sin(p.yaw), k = Math.cos(p.yaw);
+      clinger.pos = [p.pos[0] - s * 2.4, p.pos[1] + 1.2, p.pos[2] - k * 2.4];
+      this.broadcast({ t: 'cat', id: clinger.id, to: null, slapped: true });
+      this.damage(clinger, p, CAT.slapDamage, { weapon: 'slap', head: false, pos: clinger.pos });
       return;
     }
 
@@ -875,6 +1015,7 @@ export class Room {
     const now = Date.now();
     if (!target?.alive || now < target.invulnUntil) return;
     if (target.ultraKind === 'hero') return; // 날아가는 동안 무적
+    if (target.ultraKind === 'cat' && info.weapon !== 'slap') return; // 고양이는 너무 빨라서 총알이 안 맞는다
     if (target.ultraKind === 'chill') {
       // 너무 칠해서 안 맞고, 쏜 사람한테 되돌아간다
       if (attacker && attacker !== target && !info.env && attacker.ultraKind !== 'chill') {
@@ -937,7 +1078,6 @@ export class Room {
       pos: victim.pos.map(round), killerKills: killer?.kills ?? 0, victimKills: victim.kills,
       respawnMs: this.t.respawnMs,
     });
-    if (killer && killer.kills >= WIN_KILLS) this.endMatch(killer, 'kills');
   }
 
   respawn(p) {
@@ -955,9 +1095,9 @@ export class Room {
   }
 
   endByTime() {
-    const ranked = [...this.players].sort((a, b) => b.kills - a.kills || b.aura - a.aura);
+    const ranked = [...this.players].sort(rank);
     const [a, b] = ranked;
-    const tie = b && a.kills === b.kills && Math.round(a.aura) === Math.round(b.aura);
+    const tie = b && rank(a, b) === 0;
     this.endMatch(tie ? null : a, 'time');
   }
 
@@ -971,13 +1111,15 @@ export class Room {
     this.bombs = [];
     this.nukes = [];
     this.fallouts = [];
+    this.peels = [];
     const runnerUp = winner ? Math.max(0, ...this.others(winner).map((p) => p.kills)) : 0;
-    const ranked = [...this.players].sort((a, b) => b.kills - a.kills || b.aura - a.aura);
+    const ranked = [...this.players].sort(rank);
     this.broadcast({
       t: 'matchEnd',
       winner: winner?.id ?? null,
       reason,
       sixSeven: !!(winner && winner.kills === 7 && runnerUp === 6),
+      deaths: Object.fromEntries(this.players.map((p) => [p.id, p.stats.deaths ?? 0])),
       resultsMs: this.t.resultsMs,
       players: ranked.map((p) => ({
         id: p.id, name: p.name, skin: p.skin, kills: p.kills, wins: p.wins,
@@ -1005,7 +1147,7 @@ export class Room {
       players: this.players.map((p) => ({
         id: p.id, p: p.pos.map(round), y: round(p.yaw), pi: round(p.pitch),
         w: p.weapon, e: p.emote, hp: Math.max(0, Math.round(p.hp * 10) / 10), aura: Math.round(p.aura),
-        k: p.kills, a: p.alive, u: !!p.ultraKind, inv: now < p.invulnUntil,
+        k: p.kills, d: p.stats.deaths, a: p.alive, u: !!p.ultraKind, inv: now < p.invulnUntil,
       })),
     });
   }

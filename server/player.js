@@ -1,5 +1,5 @@
 // 사람·봇 공통 플레이어 상태
-import { MAX_HP } from '../shared/constants.js';
+import { MAX_HP, DEFAULT_LOADOUT } from '../shared/constants.js';
 
 export class Player {
   constructor(id, name, skin) {
@@ -12,6 +12,7 @@ export class Player {
     this.ready = false;
     this.wins = 0;
     this.rtt = 0;
+    this.loadout = { ...DEFAULT_LOADOUT };
     this.resetForMatch();
   }
 
@@ -19,7 +20,7 @@ export class Player {
     this.pos = [0, 0, 0];
     this.yaw = 0;
     this.pitch = 0;
-    this.weapon = 'fart';
+    this.weapon = this.loadout.p;
     this.emote = 0;
     this.hp = MAX_HP;
     this.aura = 0;
@@ -34,6 +35,7 @@ export class Player {
     this.ultraTick = 0;
     this.charmUntil = 0;
     this.charmBy = null;
+    this.danceBy = null;
     this.slowUntil = 0;
     this.lastHitBy = null;
     this.lastHitAt = 0;
