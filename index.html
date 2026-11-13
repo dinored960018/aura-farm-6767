@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AURA FARM 6767</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗿</text></svg>">
+<link rel="stylesheet" href="style.css?v=mwelwc83">
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<!-- 경기 화면 -->
+<div id="hud" hidden>
+  <div id="vignette"></div>
+<div id="scope" aria-hidden="true"><i></i></div>
+  <div id="ultraFrame" hidden><span id="ultraLabel">SIGMA MODE</span><div id="ultraTimeBox"><div id="ultraTime"></div></div></div>
+  <div id="claws"></div>
+  <div id="grabFace" hidden>😼</div>
+  <div id="charmFx" hidden>💖</div>
+  <div id="slowFx" hidden></div>
+  <div id="nukeFlash"></div>
+  <div id="oppen" hidden>
+    <div class="bar-top"></div>
+    <div class="bar-bottom">
+      <p data-i18n="hud.quote"></p>
+      <small id="oppenBy"></small>
+    </div>
+  </div>
+  <div id="hudGameLayer">
+    <div id="scoreBox">
+      <div id="timerBox"><small data-i18n="hud.dm"></small><i id="timer">6:07</i></div>
+      <div id="scoreChips"></div>
+    </div>
+    <div id="killfeed"></div>
+<div id="board" hidden><div class="bHead"><span data-i18n="board.title"></span><b>K</b><b>D</b></div><ol></ol></div>
+    <div id="eventBanner" hidden></div>
+
+    <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+    <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
+    <div id="damageDir"></div>
+    <div id="sixSeven"></div>
+    <div id="bigCount" hidden></div>
+    <div id="shout"></div>
+    <div id="auraPops"></div>
+
+    <div id="bigEyes"><div class="bigeye l"><u></u></div><div class="bigeye r"><u></u></div></div>
+
+    <div id="hudFace"></div>
+    <div id="vitals">
+      <div class="bar hp"><div id="hpBar"></div><span id="hpText"></span></div>
+      <div class="bar aura"><div id="auraBar"></div><span id="auraText">AURA 0 / 6,767</span></div>
+      <div id="ultraReady" hidden></div>
+    </div>
+    <div id="weaponBox">
+      <div id="reloadText" hidden></div>
+      <div id="weaponName"></div>
+      <div id="ammo">67 / 67</div>
+    </div>
+    <div id="keys">
+      <span data-i18n-html="keys.g"></span>
+      <span data-i18n-html="keys.t"></span>
+      <span data-i18n-html="keys.f"></span>
+      <span data-i18n-html="keys.shift"></span>
+      <span data-i18n-html="keys.space"></span>
+      <span data-i18n-html="keys.num"></span>
+    </div>
+    <div id="ticker"></div>
+
+    <div id="killCut" hidden>
+      <div class="lines"></div>
+      <div class="cutface"><div class="bigeye l"><u></u></div><div class="bigeye r"><u></u></div><div class="cutmouth"></div></div>
+      <div id="killCutText"></div>
+    </div>
+
+    <div id="death" hidden>
+      <h2 id="deathLine"></h2>
+      <p id="deathBy"></p>
+      <div class="respawn"><div id="deathBar"></div></div>
+      <small data-i18n="hud.respawn"></small>
+    </div>
+
+    <div id="lockHint" hidden><b data-i18n="hud.lock"></b><small data-i18n="hud.lockSub"></small></div>
+  </div>
+  <div id="rain"></div>
+</div>
+
+<!-- 휴대폰 조작 (경기 중에만) -->
+<div id="touchUi">
+  <div id="lookZone"></div>
+  <div id="moveZone"></div>
+  <div id="stick" hidden><i></i></div>
+  <button class="tb fire" data-act="fire" aria-label="Fire"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg></button>
+  <button class="tb jump" data-act="jump" aria-label="Jump"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 14l6-6 6 6"/><path d="M6 20l6-6 6 6"/></svg></button>
+  <button class="tb dash" data-act="dash" aria-label="Dash"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M2 12h12M4 17h9"/><path d="M15 6l6 6-6 6"/></svg></button>
+  <button class="tb slap" data-act="slap" aria-label="Slap"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V6a1.5 1.5 0 0 1 3 0v4M10 10V4.5a1.5 1.5 0 0 1 3 0V10M13 10V5.5a1.5 1.5 0 0 1 3 0V12M16 11a1.5 1.5 0 0 1 3 0v3a7 7 0 0 1-7 7h-1a6 6 0 0 1-5-3l-2.5-4.3a1.5 1.5 0 0 1 2.6-1.5L7 14"/></svg></button>
+  <button class="tb ultra" data-act="ultra" aria-label="Ultimate"><b>E</b></button>
+  <button class="tb swap" data-act="swap" aria-label="Switch weapon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h14l-4-4M20 15H6l4 4"/></svg></button>
+  <button class="tb zoom" data-act="zoom" aria-label="Zoom"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M11 8v6M8 11h6"/></svg></button>
+  <button class="tb farm" data-act="farm" aria-label="Aura farm"><b>G</b></button>
+</div>
+<div id="rotateHint"><b data-i18n="touch.rotate"></b></div>
+
+<!-- 첫 화면: 방 목록 -->
+<section id="home" class="panelScreen homeLayout" hidden>
+  <header class="logo">
+    <h1><span>AURA FARM</span><em>6767</em></h1>
+    <p data-i18n="home.tagline"></p>
+  </header>
+  <div class="homeMain">
+    <label class="nameTag"><span data-i18n="home.nickname"></span><input id="nameInput" maxlength="20" data-i18n-ph="home.nickPh" autocomplete="off"></label>
+    <button id="playBtn" class="primary mega"><b data-i18n="home.play"></b><small data-i18n="home.playSub"></small></button>
+    <div class="homeSub">
+      <button id="createBtn" class="ghost" data-i18n="home.friends"></button>
+      <form id="joinRow" hidden>
+        <input id="joinInput" maxlength="8" data-i18n-ph="home.joinPh" autocomplete="off" aria-label="Invite code">
+        <button class="iconBtn" data-i18n-title="home.join" aria-label="Join"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
+      </form>
+    </div>
+    <input id="roomNameInput" type="hidden">
+  </div>
+  <div class="card roomsBox" id="roomsBox" hidden>
+    <h2 data-i18n="home.rooms"></h2>
+    <div id="roomList"></div>
+  </div>
+  <div class="card homeFoot">
+    <div class="foot">
+      <span id="connStatus" data-i18n="home.finding"></span>
+      <span id="ping"></span>
+      <div id="langPick" role="group" aria-label="Language"><button type="button" data-lang="en">ENG</button><button type="button" data-lang="ko">KR</button></div>
+      <label class="vol"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg><input id="volume" type="range" min="0" max="1" step="0.05" value="0.8"></label>
+    </div>
+  </div>
+</section>
+
+<!-- 대기실 -->
+<section id="room" class="panelScreen roomLayout" hidden>
+  <div class="card side">
+    <div class="titleRow"><h2 id="roomTitle"></h2><button id="leaveBtn" class="iconBtn" data-i18n-title="room.leave" aria-label="Leave"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h5v16h-5"/><path d="M10 8l-4 4 4 4M6 12h10"/></svg></button></div>
+    <form id="renameForm" class="row">
+      <input id="renameInput" maxlength="12" data-i18n-ph="room.renamePh" autocomplete="off" aria-label="Nickname">
+      <button class="ghost" data-i18n="room.rename"></button>
+    </form>
+    <div id="profileBar"></div>
+    <div id="slots"></div>
+    <button id="readyBtn" class="primary big"></button>
+    <div class="row actions">
+      <button id="copyBtn" class="invite" data-i18n-title="room.inviteTitle"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg><span data-i18n="room.invite"></span></button>
+      <div class="botPair">
+        <button id="botOutBtn" class="iconBtn" data-i18n-title="room.removeBot" aria-label="Remove bot"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+        <span class="botLabel"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="2"/><path d="M12 8V4M9 13v1M15 13v1M2 13v3M22 13v3"/></svg></span>
+        <button id="botBtn" class="iconBtn" data-i18n-title="room.addBot" aria-label="Add bot"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12M12 6v12"/></svg></button>
+      </div>
+    </div>
+    <h3 class="chatBit" data-i18n="room.chat"></h3>
+    <div id="chatLog" class="chatBit"></div>
+    <form id="chatForm" class="row chatBit"><input id="chatInput" maxlength="120" data-i18n-ph="room.chatPh" autocomplete="off"><button class="ghost" data-i18n="room.send"></button></form>
+  </div>
+  <div class="card side right">
+    <div id="skinDesc"></div>
+    <div id="skinPick"></div>
+    <h3 data-i18n="room.loadout"></h3>
+    <div id="loadoutPick"></div>
+    <h3 data-i18n="room.daily"></h3>
+    <div id="missions"></div>
+    <h3 data-i18n="room.mode"></h3>
+    <div id="modePick"></div>
+    <h3 data-i18n="room.map"></h3>
+    <div id="mapPick"></div>
+    <h3 data-i18n="room.controls"></h3>
+    <ul class="help">
+      <li data-i18n-html="help.1"></li>
+      <li data-i18n-html="help.2"></li>
+      <li data-i18n-html="help.3"></li>
+      <li data-i18n-html="help.4"></li>
+      <li data-i18n-html="help.5"></li>
+      <li data-i18n-html="help.6"></li>
+    </ul>
+  </div>
+</section>
+
+<!-- 결과 -->
+<section id="result" class="panelScreen" hidden>
+  <div class="resultBox">
+    <div id="sixSevenBanner" hidden data-i18n="result.sixSeven"></div>
+    <h1 id="resultTitle"></h1>
+    <p id="resultSub"></p>
+    <div id="resultStats"></div>
+    <div id="reward"></div>
+    <p id="resultCountdown"></p>
+  </div>
+</section>
+
+<!-- 상점 -->
+<section id="shop" class="panelScreen" hidden>
+  <div class="card shopCard" role="dialog" aria-labelledby="shopTitle">
+    <div class="titleRow"><h2 id="shopTitle" data-i18n="shop.title"></h2><span class="coins" id="shopCoins"></span><button id="shopClose" class="iconBtn" data-i18n-title="shop.close" aria-label="Close"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div id="shopTabs" role="tablist"><button type="button" data-tab="hat" data-i18n="shop.hat"></button><button type="button" data-tab="face" data-i18n="shop.face"></button></div>
+    <div id="shopGrid"></div>
+    <p class="shopNote" data-i18n="shop.note"></p>
+  </div>
+</section>
+
+<div id="toast" hidden></div>
+<div id="adBlock" hidden></div>
+<script type="module" src="js/main.js?v=mwelwc83"></script>
+</body>
+</html>
