@@ -1048,7 +1048,8 @@ export class Character {
       case 'tung': {
         // 빠따로 손바닥을 탁탁
         const s = Math.abs(Math.sin(t * 5.2));
-        A.rotation.set(-1.05 - s * 0.75, 0, 0.42);
+        // 팔꿈치를 굽혀 빠따를 앞으로 눕히고, 오른손바닥에 톡톡 (얼굴을 가리지 않게)
+        A.rotation.set(-0.12 - s * 0.12, 0, 0.12);
         B.rotation.set(-0.85, 0, -0.32);
         this.foreZ = [0, -0.85];
         H.rotation.x = 0.12 - s * 0.14;
@@ -1061,7 +1062,7 @@ export class Character {
           Character.fx?.tap?.([p.x - Math.sin(fwd) * 0.55, p.y + 0.98, p.z - Math.cos(fwd) * 0.55]);
         }
         this.tapPrev = s;
-        return [-0.25, -0.1];
+        return [-1.2 - s * 0.3, -0.1];
       }
       case 'cat': {
         // 앞발 핥으면서 킹받게 쳐다보기
@@ -1503,6 +1504,11 @@ export class Character {
         bendL = -0.85 - this.pitch * 0.1;
       }
       bendR = -0.1 - this.kick * 0.3;
+      if (this.skinId === 'tung') {
+        // 사후르는 왼손에 빠따: 받치지 말고 옆으로 내려 든다
+        this.armL.rotation.set(-0.35 - pump, 0, -0.12);
+        bendL = -0.55;
+      }
       this.visual.rotation.z = 0;
       this.head.rotation.y = -this.twist * 0.8;
     }

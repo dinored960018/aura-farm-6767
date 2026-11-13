@@ -1289,9 +1289,7 @@ export class Game {
     this.effects.mushroom(m.pos, m.radius);
     this.hud.nukeFlash();
     this.pipeline.hit(1.6);
-    this.cineUntil = performance.now() + 2400;
-    this.cinePos = m.pos;
-    this.mouseDown = false;
+    // 화면을 핵 쪽으로 억지로 돌리지 않는다. 번쩍임과 흔들림만
     this.fovKick = 30;
     if ('speechSynthesis' in window) speechSynthesis.cancel();
     const d = Math.hypot(this.body.x - m.pos[0], this.body.z - m.pos[2]);
@@ -1443,7 +1441,7 @@ export class Game {
     const up = new THREE.Vector3().crossVectors(right, dir).normalize();
     const moving = Math.hypot(this.body.vx, this.body.vz) > 2 ? 1.6 : 1;
     const air = this.body.onGround ? 1 : 1.5;
-    const zoom = this.zoom ? (w.zoomSpread ?? 0.45 * w.spread) / w.spread : 1;
+    const zoom = this.zoom && w.spread > 0 ? (w.zoomSpread ?? 0.45 * w.spread) / w.spread : this.zoom ? 0.45 : 1;
     const spread = w.spread * (w.pellets > 1 ? 1 : moving * air * zoom);
     const out = [];
     for (let i = 0; i < w.pellets; i++) {
@@ -1471,7 +1469,8 @@ export class Game {
     if (!inf) this.ammo[w.id]--;
     this.cooldown = w.interval * (this.ultraKind === 'sigma' ? 0.6 : 1);
     this.recoil = Math.min(1.5, this.recoil + (w.id === 'fart' ? 0.28 : 1));
-    const kick = { fart: 0.002, six7: 0.018, boom: 0.03, laser: 0 }[w.id];
+    // 쏘면 총구가 살짝 들린다 (없는 무기는 0: NaN이면 화면 전체가 까매진다)
+    const kick = { fart: 0.002, six7: 0.018, boom: 0.03, laser: 0, sniper: 0.045, ice: 0.025, dual: 0.006 }[w.id] ?? 0;
     this.pitch = clamp(this.pitch + kick, -1.5, 1.5);
 
     const o = [this.camera.position.x, this.camera.position.y, this.camera.position.z];
@@ -1786,6 +1785,13 @@ export class Game {
   }
 
   updateCamera(dt) {
+    // 어디선가 NaN이 들어와도 화면이 까맣게 굳지 않게 되돌린다
+    if (!Number.isFinite(this.pitch)) this.pitch = 0;
+    if (!Number.isFinite(this.yaw)) this.yaw = 0;
+    if (!Number.isFinite(this.lastPitch)) this.lastPitch = this.pitch;
+    if (!Number.isFinite(this.lastYaw)) this.lastYaw = this.yaw;
+    if (!Number.isFinite(this.swayX)) this.swayX = 0;
+    if (!Number.isFinite(this.swayY)) this.swayY = 0;
     this.updateCameraBase(dt);
     if (performance.now() < this.cineUntil && this.cinePos) {
       // 조준값은 그대로 두고 화면만 위로 돌린다

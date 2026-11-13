@@ -96,8 +96,8 @@ input { font: inherit; }
 .tag { font-style: normal; font: 400 11px/1 var(--meme); letter-spacing: .5px; padding: 2px 4px 1px; border-radius: 2px; background: var(--ink); color: #fff; }
 .tag.bot { background: #8c84a0; }
 .tag.wins { background: var(--gold); color: var(--ink); }
-.stamp { position: absolute; right: 4px; top: -13px; font: 400 11px/1 var(--meme); letter-spacing: .5px; padding: 3px 5px 2px; border: 2px solid var(--ink); border-radius: 2px; background: #fff; color: #7a7288; transform: rotate(4deg); }
-.slot.ready .stamp { background: var(--green); color: var(--ink); transform: rotate(-5deg); }
+.slotStamp { position: absolute; right: 4px; top: -13px; font: 400 11px/1 var(--meme); letter-spacing: .5px; padding: 3px 5px 2px; border: 2px solid var(--ink); border-radius: 2px; background: #fff; color: #7a7288; transform: rotate(4deg); }
+.slot.ready .slotStamp { background: var(--green); color: var(--ink); transform: rotate(-5deg); }
 
 #readyBtn { position: relative; }
 .actions { align-items: center; }

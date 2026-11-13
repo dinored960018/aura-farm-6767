@@ -276,6 +276,7 @@ export class ViewModel {
   // s: { dt, t, speed, fwd, side, onGround, vy, zoom, sway:[x,y], reloadK (0~1 또는 -1), sigma, slap }
   update(s) {
     const { dt } = s;
+    for (const k of ['kz', 'kzV', 'kx', 'kxV', 'kr', 'krV', 'dip', 'dipV', 'walk', 'bob', 'sprint', 'aim', 'strafe']) if (!Number.isFinite(this[k])) this[k] = 0;
     const step = (x, v, k, d) => { v += (-k * x - d * v) * dt; return [x + v * dt, v]; };
     [this.kz, this.kzV] = step(this.kz, this.kzV, 260, 20);
     [this.kx, this.kxV] = step(this.kx, this.kxV, 180, 17);

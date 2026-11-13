@@ -490,7 +490,7 @@ function renderRoom() {
         sub.append(tag);
       }
       const stamp = document.createElement('b');
-      stamp.className = 'stamp';
+      stamp.className = 'slotStamp';
       stamp.textContent = t(p.ready ? 'room.isReady' : 'room.notReady');
       card.append(face, info, stamp);
     } else {
