@@ -697,8 +697,11 @@ export class Game {
     m.pickups.forEach((a, i) => { this.pickupMeshes[i].visible = a; });
     this.timeLeft = m.endsIn;
     this.setHudVisible(true);
-    this.setViewWeapon('fart');
-    this.hud.setWeapon(WEAPONS.fart);
+    // 대기실에서 고른 주무기로 시작
+    this.weapon = this.loadout.p;
+    this.setViewWeapon(this.weapon);
+    this.hud.setWeapon(WEAPONS[this.weapon]);
+    this.me?.setWeapon(this.weapon);
     this.hud.reset();
     this.canvas.classList.remove('dead');
     this.requestLock();

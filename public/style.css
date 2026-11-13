@@ -604,3 +604,5 @@ body.scoped #crosshair, body.scoped .crosshair { visibility: hidden; }
 #result:has(#resultStats.many) #resultTitle { font-size: clamp(40px, 6vw, 72px); }
 #result { overflow-y: auto; justify-content: safe center; }
 #result:has(#resultStats.many) #resultTitle { font-size: clamp(34px, 5vw, 56px); text-shadow: 4px 4px 0 var(--pink); }
+/* 키 작은 화면(휴대폰 가로): 준비 버튼이 스크롤 아래로 숨지 않게 */
+@media (max-height: 560px) { #readyBtn { position: sticky; bottom: 0; z-index: 3; box-shadow: 0 -6px 0 var(--paper), 5px 5px 0 var(--ink); } }
