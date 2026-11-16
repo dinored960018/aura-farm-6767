@@ -55,9 +55,9 @@ function hangSigns(list, own, ceilY) {
     x.textBaseline = 'middle';
     lines.forEach((l, k) => {
       let size = 150 / lines.length;
-      x.font = `900 ${size}px Impact, "Malgun Gothic", "Segoe UI Emoji", sans-serif`;
+      x.font = `900 ${size}px Impact, "AuraKo", "Malgun Gothic", "Segoe UI Emoji", sans-serif`;
       const tw = x.measureText(l).width;
-      if (tw > 440) { size *= 440 / tw; x.font = `900 ${size}px Impact, "Malgun Gothic", "Segoe UI Emoji", sans-serif`; }
+      if (tw > 440) { size *= 440 / tw; x.font = `900 ${size}px Impact, "AuraKo", "Malgun Gothic", "Segoe UI Emoji", sans-serif`; }
       x.fillText(l, W / 2, y0 + H / 2 + (k - (lines.length - 1) / 2) * (200 / lines.length));
     });
     const v0 = 1 - (i + 1) / N, v1 = 1 - i / N;

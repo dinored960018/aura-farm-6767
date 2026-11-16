@@ -115,9 +115,9 @@ function bannerTexture(lines, bg, fg) {
   const n = lines.length;
   lines.forEach((l, i) => {
     let size = 300 / n;
-    x.font = `900 ${size}px Impact, "Malgun Gothic", "Segoe UI Emoji", sans-serif`;
+    x.font = `900 ${size}px Impact, "AuraKo", "Malgun Gothic", "Segoe UI Emoji", sans-serif`;
     const w = x.measureText(l).width;
-    if (w > 900) { size *= 900 / w; x.font = `900 ${size}px Impact, "Malgun Gothic", "Segoe UI Emoji", sans-serif`; }
+    if (w > 900) { size *= 900 / w; x.font = `900 ${size}px Impact, "AuraKo", "Malgun Gothic", "Segoe UI Emoji", sans-serif`; }
     x.fillText(l, 512, 256 + (i - (n - 1) / 2) * (420 / n));
   });
   const t = new THREE.CanvasTexture(c);

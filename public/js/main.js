@@ -13,6 +13,9 @@ import { portal } from './portal.js';
 import { setupTouch } from './touch.js';
 import { createProfile, xpNeed } from './profile.js';
 
+// 한글 밈 글씨를 미리 받아 둔다(3D 이름표·간판이 기본 글씨로 그려지지 않게)
+try { document.fonts?.load('40px AuraKo', '가'); } catch {}
+
 // 진행 기록. 포털 SDK가 준비된 뒤에 만든다 (그 전에는 브라우저 저장소)
 let profile = createProfile(portal.store);
 const COIN = '<svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v9M9.5 9.5h4a1.8 1.8 0 0 1 0 3.6h-3a1.8 1.8 0 0 0 0 3.6h4"/></svg>';

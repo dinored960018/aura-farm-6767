@@ -1,4 +1,6 @@
 /* 일부러 싸구려 밈 스타일. 임팩트 폰트 + 만화 그림자. */
+/* 한글 굵은 밈 글씨: 블랙한산스(OFL). 한글 글자에만 쓰고 영어·숫자는 임팩트 그대로 */
+@font-face { font-family: "AuraKo"; src: url("fonts/BlackHanSans-Regular.ttf") format("truetype"); font-display: swap; unicode-range: U+1100-11FF, U+3130-318F, U+AC00-D7AF, U+3000-303F, U+FF01-FF60; }
 :root {
   --ink: #0b0614;
   --paper: #fff8e7;
@@ -7,7 +9,7 @@
   --cyan: #19e3e8;
   --green: #4dff6a;
   --red: #ff2d2d;
-  --meme: Impact, "Arial Black", "Malgun Gothic", sans-serif;
+  --meme: Impact, "AuraKo", "Arial Black", "Malgun Gothic", sans-serif;
   --ui: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
 }
 * { box-sizing: border-box; }

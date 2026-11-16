@@ -5,7 +5,7 @@ import { softTexture, glowTexture } from './character.js';
 
 const texCache = new Map();
 
-export function textTexture(text, { color = '#fff', stroke = '#000', size = 96, font = 'Impact, "Malgun Gothic", sans-serif' } = {}) {
+export function textTexture(text, { color = '#fff', stroke = '#000', size = 96, font = 'Impact, "AuraKo", "Malgun Gothic", sans-serif' } = {}) {
   const key = `${text}|${color}|${stroke}|${size}`;
   if (texCache.has(key)) return texCache.get(key);
   const c = document.createElement('canvas');
