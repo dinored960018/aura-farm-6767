@@ -50,6 +50,23 @@ export class Hud {
 
   setLockHint(v) { this.el.lock.hidden = !v; }
 
+  // 오른쪽 아래 무기칸: 1 주무기, 2 보조무기, F 싸대기, E 각성. 들고 있는 칸만 밝게
+  setSlots(loadout, cur) {
+    const box = document.getElementById('wSlots');
+    if (!box) return;
+    const rows = [['1', loadout.p], ['2', loadout.s], ['F', 'slap'], ['E', 'ultra']];
+    box.replaceChildren(...rows.map(([k, id]) => {
+      const row = document.createElement('div');
+      row.className = `wSlotRow${id === cur ? ' on' : ''}`;
+      const name = document.createElement('span');
+      name.textContent = id === 'slap' ? t('label.slap').replace(/^\S+\s/, '') : id === 'ultra' ? t('hud.ultraSlot') : t(`weapon.${id}`);
+      const key = document.createElement('kbd');
+      key.textContent = k;
+      row.append(name, key);
+      return row;
+    }));
+  }
+
   setWeapon(w) {
     this.el.weapon.textContent = t(`weapon.${w.id}`);
     this.restart(this.el.weapon, 'wobble');
@@ -152,10 +169,13 @@ export class Hud {
       const d = document.createElement('b');
       d.className = 'bD';
       d.textContent = r.d;
+      const au = document.createElement('b');
+      au.className = 'bA';
+      au.textContent = (r.a ?? 0).toLocaleString();
       li.append(rank);
       const skin = g.chars.get(r.id)?.skinId;
       if (skin) li.append(faceEl(skin, 'chipFace'));
-      li.append(n, k, d);
+      li.append(n, k, d, au);
       return li;
     }));
   }

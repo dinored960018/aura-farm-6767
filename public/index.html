@@ -34,7 +34,7 @@
       <div id="scoreChips"></div>
     </div>
     <div id="killfeed"></div>
-<div id="board" hidden><div class="bHead"><span data-i18n="board.title"></span><b>K</b><b>D</b></div><ol></ol></div>
+<div id="board" hidden><div class="bHead"><span data-i18n="board.title"></span><b>K</b><b>D</b><b>AURA</b></div><ol></ol></div>
     <div id="eventBanner" hidden></div>
 
     <div id="crosshair"><i></i><i></i><i></i><i></i></div>
@@ -54,6 +54,7 @@
       <div id="ultraReady" hidden></div>
     </div>
     <div id="weaponBox">
+      <div id="wSlots"></div>
       <div id="reloadText" hidden></div>
       <div id="weaponName"></div>
       <div id="ammo">67 / 67</div>
@@ -134,40 +135,37 @@
   </div>
 </section>
 
-<!-- 대기실 -->
-<section id="room" class="panelScreen roomLayout" hidden>
-  <div class="card side">
-    <div class="titleRow"><h2 id="roomTitle"></h2><button id="leaveBtn" class="iconBtn" data-i18n-title="room.leave" aria-label="Leave"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h5v16h-5"/><path d="M10 8l-4 4 4 4M6 12h10"/></svg></button></div>
-    <form id="renameForm" class="row">
-      <input id="renameInput" maxlength="12" data-i18n-ph="room.renamePh" autocomplete="off" aria-label="Nickname">
-      <button class="ghost" data-i18n="room.rename"></button>
-    </form>
-    <div id="profileBar"></div>
-    <div id="slots"></div>
-    <button id="readyBtn" class="primary big"></button>
-    <div class="row actions">
-      <button id="copyBtn" class="invite" data-i18n-title="room.inviteTitle"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg><span data-i18n="room.invite"></span></button>
-      <div class="botPair">
-        <button id="botOutBtn" class="iconBtn" data-i18n-title="room.removeBot" aria-label="Remove bot"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button>
-        <span class="botLabel"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="2"/><path d="M12 8V4M9 13v1M15 13v1M2 13v3M22 13v3"/></svg></span>
-        <button id="botBtn" class="iconBtn" data-i18n-title="room.addBot" aria-label="Add bot"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12M12 6v12"/></svg></button>
-      </div>
+<!-- 대기실: 위 탭 메뉴, 왼쪽 탭 내용, 가운데 캐릭터, 오른쪽 로비, 오른쪽 아래 시작 -->
+<section id="room" class="panelScreen menuLayout" hidden>
+  <nav class="topNav">
+    <div class="brand">AURA FARM <em>6767</em></div>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="play" class="on" aria-selected="true" data-i18n="tab.play"></button>
+      <button type="button" role="tab" data-tab="loadout" data-i18n="tab.loadout"></button>
+      <button type="button" role="tab" data-tab="chars" data-i18n="tab.chars"></button>
+      <button type="button" role="tab" data-tab="missions" data-i18n="tab.missions"></button>
     </div>
-    <h3 class="chatBit" data-i18n="room.chat"></h3>
-    <div id="chatLog" class="chatBit"></div>
-    <form id="chatForm" class="row chatBit"><input id="chatInput" maxlength="120" data-i18n-ph="room.chatPh" autocomplete="off"><button class="ghost" data-i18n="room.send"></button></form>
-  </div>
-  <div class="card side right">
-    <div id="skinDesc"></div>
-    <div id="skinPick"></div>
-    <h3 data-i18n="room.loadout"></h3>
-    <div id="loadoutPick"></div>
-    <h3 data-i18n="room.daily"></h3>
-    <div id="missions"></div>
+    <div id="profileBar"></div>
+    <button id="leaveBtn" class="iconBtn navBtn" data-i18n-title="room.leave" aria-label="Leave"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h5v16h-5"/><path d="M10 8l-4 4 4 4M6 12h10"/></svg></button>
+  </nav>
+
+  <div class="card tabPanel" data-panel="play" role="tabpanel">
     <h3 data-i18n="room.mode"></h3>
     <div id="modePick"></div>
     <h3 data-i18n="room.map"></h3>
     <div id="mapPick"></div>
+  </div>
+  <div class="card tabPanel" data-panel="loadout" role="tabpanel" hidden>
+    <h3 data-i18n="room.loadout"></h3>
+    <div id="loadoutPick"></div>
+  </div>
+  <div class="card tabPanel" data-panel="chars" role="tabpanel" hidden>
+    <div id="skinDesc"></div>
+    <div id="skinPick"></div>
+  </div>
+  <div class="card tabPanel" data-panel="missions" role="tabpanel" hidden>
+    <h3 data-i18n="room.daily"></h3>
+    <div id="missions"></div>
     <h3 data-i18n="room.controls"></h3>
     <ul class="help">
       <li data-i18n-html="help.1"></li>
@@ -177,6 +175,30 @@
       <li data-i18n-html="help.5"></li>
       <li data-i18n-html="help.6"></li>
     </ul>
+  </div>
+
+  <aside class="card lobbyPanel">
+    <div class="titleRow"><h2 id="roomTitle"></h2></div>
+    <form id="renameForm" class="row">
+      <input id="renameInput" maxlength="12" data-i18n-ph="room.renamePh" autocomplete="off" aria-label="Nickname">
+      <button class="ghost" data-i18n="room.rename"></button>
+    </form>
+    <div id="slots"></div>
+    <div class="row actions">
+      <button id="copyBtn" class="invite" data-i18n-title="room.inviteTitle"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg><span data-i18n="room.invite"></span></button>
+      <div class="botPair">
+        <button id="botOutBtn" class="iconBtn" data-i18n-title="room.removeBot" aria-label="Remove bot"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+        <span class="botLabel"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="2"/><path d="M12 8V4M9 13v1M15 13v1M2 13v3M22 13v3"/></svg></span>
+        <button id="botBtn" class="iconBtn" data-i18n-title="room.addBot" aria-label="Add bot"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12M12 6v12"/></svg></button>
+      </div>
+    </div>
+    <div id="chatLog" class="chatBit"></div>
+    <form id="chatForm" class="row chatBit"><input id="chatInput" maxlength="120" data-i18n-ph="room.chatPh" autocomplete="off"><button class="ghost" data-i18n="room.send"></button></form>
+  </aside>
+
+  <div class="playDock">
+    <div id="dockInfo"></div>
+    <button id="readyBtn" class="primary big"></button>
   </div>
 </section>
 

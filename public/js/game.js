@@ -595,6 +595,7 @@ export class Game {
     this.setViewWeapon(id);
     this.sfx.equip?.(id);
     this.hud.setWeapon(WEAPONS[id]);
+    this.hud.setSlots(this.loadout, id);
     this.me?.setWeapon(id);
   }
 
@@ -701,6 +702,7 @@ export class Game {
     this.weapon = this.loadout.p;
     this.setViewWeapon(this.weapon);
     this.hud.setWeapon(WEAPONS[this.weapon]);
+    this.hud.setSlots(this.loadout, this.weapon);
     this.me?.setWeapon(this.weapon);
     this.hud.reset();
     this.canvas.classList.remove('dead');
@@ -763,7 +765,7 @@ export class Game {
 
   onSnap(m) {
     this.timeLeft = m.left;
-    this.scores = m.players.map((s) => ({ id: s.id, k: s.k, d: s.d ?? 0 }));
+    this.scores = m.players.map((s) => ({ id: s.id, k: s.k, d: s.d ?? 0, a: s.aura ?? 0 }));
     if (this.boardOpen) this.hud.renderBoard(this);
     for (const s of m.players) {
       const mine = s.id === this.myId;
@@ -1023,7 +1025,7 @@ export class Game {
     this.ultraKind = null;
     this.forced = false;
     this.hud.setUltra(false);
-    if (wasLaser) this.hud.setWeapon(WEAPONS[this.weapon]);
+    if (wasLaser) { this.hud.setWeapon(WEAPONS[this.weapon]); this.hud.setSlots(this.loadout, this.weapon); }
     this.setHudVisible(this.alive);
   }
 

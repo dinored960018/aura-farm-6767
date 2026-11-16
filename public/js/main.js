@@ -436,6 +436,7 @@ function renderLoadout(box) {
         net.send({ t: 'loadout', loadout: next });
         sfx.click();
         renderLoadout(box);
+        renderDock();
       };
       row.append(b);
     }
@@ -459,6 +460,27 @@ function renderModes(box) {
     b.onclick = () => { net.send({ t: 'mode', id }); sfx.click(); };
     box.append(b);
   }
+}
+
+// 위쪽 탭: 플레이 / 무기 / 캐릭터 / 미션
+for (const b of document.querySelectorAll('.topNav [data-tab]')) {
+  b.onclick = () => {
+    for (const x of document.querySelectorAll('.topNav [data-tab]')) {
+      x.classList.toggle('on', x === b);
+      x.setAttribute('aria-selected', x === b);
+    }
+    for (const p of document.querySelectorAll('.tabPanel')) p.hidden = p.dataset.panel !== b.dataset.tab;
+    sfx.click();
+  };
+}
+
+// 시작 버튼 위 한 줄: 지금 고른 모드 · 맵 · 무기
+function renderDock() {
+  if (!room) return;
+  const l = myLoadout();
+  const mc = room.mapChoice ?? 'random';
+  const map = t(mc === 'random' ? 'room.random' : `map.${mc}`);
+  $('dockInfo').textContent = [t(`mode.${room.mode ?? 'classic'}`), map, `${t(`weapon.${l.p}`)} + ${t(`weapon.${l.s}`)}`].join('  ·  ');
 }
 
 function renderRoom() {
@@ -517,6 +539,7 @@ function renderRoom() {
   $('botOutBtn').disabled = room.state !== 'lobby' || !room.players.some((p) => p.isBot);
   renderModes($('modePick'));
   renderLoadout($('loadoutPick'));
+  renderDock();
   renderMaps($('mapPick'));
   renderSkins($('skinPick'));
   showSkinDesc();
