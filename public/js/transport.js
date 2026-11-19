@@ -136,9 +136,12 @@ function workerTimer(ms, fn) {
 
 // 방장: 내 브라우저가 서버
 class HostTransport extends Fake {
-  constructor() {
+  // code·restore: 옛 방장이 나가서 내가 이어받는 경우
+  constructor({ code = null, restore = null } = {}) {
     super();
     this.isHost = true;
+    this.preset = code;
+    this.restoreSave = restore;
     this.code = null;
     this.hub = null;
     this.peerFailed = false;
@@ -154,9 +157,12 @@ class HostTransport extends Fake {
       .then((r) => (r.ok ? r.text() : ''))
       .then(async (txt) => { (await import('../shared/filter.js')).addWords(txt.split('\n')); })
       .catch(() => {});
-    this.hub = createHub({ autoTick: false });
+    this.hub = createHub({ autoTick: false, migrate: true });
+    if (this.restoreSave) {
+      try { this.hub.restore(this.restoreSave); } catch (e) { console.error('방 이어받기 실패', e); }
+    }
     workerTimer(TICK_MS, () => this.hub.tick());
-    this.client = this.hub.connect((raw) => queueMicrotask(() => this.deliver(raw)));
+    this.client = this.hub.connect((raw) => queueMicrotask(() => this.deliver(raw)), { local: true });
     this.opened();
   }
 
@@ -180,6 +186,13 @@ class HostTransport extends Fake {
   }
 
   assignCode() {
+    if (this.preset) {
+      this.code = this.preset;
+      this.preset = null;
+      try { sessionStorage.setItem('aura-host-code', this.code); } catch { /* 무시 */ }
+      this.onCode?.();
+      return;
+    }
     this.code = Array.from(crypto.getRandomValues(new Uint8Array(5)), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
     try { sessionStorage.setItem('aura-host-code', this.code); } catch { /* 무시 */ }
     this.onCode?.();
@@ -234,25 +247,30 @@ class HostTransport extends Fake {
 
 // 손님: 방장에게 붙는다
 class GuestTransport extends Fake {
-  constructor(code) {
+  // retry: 방장이 바뀌는 중. 새 방장이 코드를 등록할 때까지 몇 초 동안 다시 시도한다
+  constructor(code, { retry = false } = {}) {
     super();
     this.isGuest = true;
     this.code = code;
+    this.retry = retry;
     this.start();
   }
 
   async start() {
     if (found) { this.adopt(found); found = null; return; }
-    const timeout = setTimeout(() => this.closed(), 15000);
+    const deadline = Date.now() + (this.retry ? 20000 : 0);
+    const timeout = setTimeout(() => this.closed(), this.retry ? 23000 : 15000);
     try {
       const Peer = await loadPeer();
       this.peer = new Peer();
-      this.peer.on('error', () => this.closed());
-      this.peer.on('open', () => {
+      const dial = () => {
+        if (this.readyState !== 0) return;
         const conn = this.peer.connect(PREFIX + this.code, { serialization: 'raw', reliable: true });
         this.conn = conn;
         let lastData = Date.now();
+        let open = false;
         conn.on('open', () => {
+          open = true;
           clearTimeout(timeout);
           lastData = Date.now();
           const watch = setInterval(() => {
@@ -261,10 +279,16 @@ class GuestTransport extends Fake {
           }, 2000);
           this.opened();
         });
-        conn.on('data', (d) => { lastData = Date.now(); this.deliver(d); });
-        conn.on('close', () => this.closed());
-        conn.on('error', () => this.closed());
+        conn.on('data', (d) => { if (conn === this.conn) { lastData = Date.now(); this.deliver(d); } });
+        conn.on('close', () => { if (open || !this.retry) this.closed(); });
+        conn.on('error', () => { if (open || !this.retry) this.closed(); });
+      };
+      this.peer.on('error', (e) => {
+        if (this.readyState === 0 && e?.type === 'peer-unavailable' && Date.now() < deadline) setTimeout(dial, 1500);
+        else if (this.readyState === 0 && this.retry && Date.now() < deadline && e?.type !== 'browser-incompatible') setTimeout(dial, 1500);
+        else this.closed();
       });
+      this.peer.on('open', dial);
     } catch {
       this.closed();
     }
@@ -293,7 +317,13 @@ class GuestTransport extends Fake {
   send(raw) { if (this.conn?.open) this.conn.send(raw); }
 }
 
-export function openTransport() {
+// opts.host: 옛 방장이 나가서 내가 새 방장 (code·restore), opts.guest: 새 방장의 코드
+export function openTransport(opts = {}) {
+  if (opts.host) {
+    freeSlots = opts.restore?.public ? [...PUB_SLOTS].sort(() => Math.random() - 0.5) : null;
+    return new HostTransport(opts);
+  }
+  if (opts.guest) return new GuestTransport(opts.guest, { retry: true });
   if (!P2P) {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     return new WebSocket(`${proto}://${location.host}/ws`);

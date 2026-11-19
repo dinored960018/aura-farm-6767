@@ -48,8 +48,8 @@ let myReady = false;
 let reconnectTimer = 0;
 let pingTimer = 0;
 
-function connect() {
-  const ws = openTransport();
+function connect(opts) {
+  const ws = openTransport(opts);
   net.ws = ws;
   ws.onopen = () => {
     $('connStatus').textContent = t(ws.isHost ? 'conn.host' : ws.isGuest ? 'conn.guest' : 'conn.server');
@@ -66,8 +66,11 @@ function connect() {
   ws.onclose = () => {
     clearInterval(pingTimer);
     if (ws.isGuest) {
-      // 방장이 나갔거나 코드가 틀림: 첫 화면으로
-      leaveToHome(t(joined ? 'conn.hostLeft' : 'conn.badCode'));
+      if (ws !== net.ws) return; // 이미 다른 연결로 옮김
+      // 방장이 나감: 이어받을 사람이 정해져 있으면 새 방장에게 옮겨 경기를 잇는다
+      if (!migrating && joined && room && net.heir) { migrate(); return; }
+      // 코드가 틀렸거나 이어받기도 실패: 첫 화면으로
+      leaveToHome(t(joined || migrating ? 'conn.hostLeft' : 'conn.badCode'));
       return;
     }
     $('connStatus').textContent = t('conn.lost');
@@ -84,7 +87,33 @@ function connect() {
 }
 
 function sendHello() {
-  net.send({ t: 'hello', name: $('nameInput').value.trim() || t('home.nickPh'), skin: currentSkin, look: profile.data.equip, loadout: myLoadout() });
+  net.send({ t: 'hello', name: $('nameInput').value.trim() || t('home.nickPh'), skin: currentSkin, look: profile.data.equip, loadout: myLoadout(), ...(net.prevId ? { was: net.prevId } : {}) });
+}
+
+// ---------- 방장 이전 ----------
+// 방장(서버 역할 브라우저)이 나가면, 미리 정해 둔 사람이 새 방장이 되고 나머지는 그 사람에게 붙는다.
+// 새 방장은 옛 방장이 맡겨 둔 상태(점수·남은 시간·봇)로 방을 다시 만든다
+let migrating = false;
+function migrate() {
+  const h = net.heir;
+  net.heir = null;
+  const iAmHeir = h.heir === net.id;
+  if (iAmHeir && !h.save) { leaveToHome(t('conn.hostLeft')); return; }
+  migrating = true;
+  joined = false;
+  net.prevId = net.id;
+  clearInterval(resultTimer);
+  if (inMatch) leaveMatchView();
+  if (room) { showScreen('room'); renderRoom(); }
+  toast(t('conn.migrating'));
+  $('connStatus').textContent = t('conn.migrating');
+  // 새로고침해도 새 방으로 들어가게 주소의 코드를 바꾼다
+  if (!portal.active && !iAmHeir) {
+    const u = new URL(location.href);
+    u.searchParams.set('room', h.code);
+    history.replaceState(null, '', u.href);
+  }
+  connect(iAmHeir ? { host: true, code: h.code, restore: h.save } : { guest: h.code });
 }
 
 const H = net.handlers;
@@ -130,6 +159,19 @@ function leaveToHome(text) {
 }
 H.welcome = (m) => {
   net.id = m.id;
+  if (migrating) {
+    migrating = false;
+    if (!m.rooms.length) { leaveToHome(t('conn.hostLeft')); return; }
+    joined = true;
+    sendHello();
+    net.send({ t: 'join', id: m.rooms[0].id });
+    if (net.ws.isHost) {
+      net.ws.onCode = syncAddress;
+      net.ws.openInvites?.(() => {});
+    }
+    toast(t('conn.migrated'));
+    return;
+  }
   renderRooms(m.rooms);
   // 로컬 서버: 주소의 방 번호로 바로 입장
   if (!P2P && inviteCode && !joined) {
@@ -165,6 +207,7 @@ H.pong = (m) => {
   $('ping').textContent = `${net.rtt}ms`;
 };
 H.rooms = (m) => renderRooms(m.rooms);
+H.heir = (m) => { net.heir = m; };
 H.sys = (m) => addChat(t('system'), t(m.key, m.mapId
   ? { ...m.vars, map: t(m.mapId === 'random' ? 'room.random' : `map.${m.mapId}`) }
   : m.modeId ? { ...m.vars, mode: t(`mode.${m.modeId}`) } : m.vars));

@@ -17,6 +17,9 @@ const round = (n) => Math.round(n * 100) / 100;
 const BOT_NAMES = ['AI Minsu', 'Practice NPC', 'Bot Rocks', 'Ohio Bot', 'Payroll Bot', 'Skill Issue', 'Intern Bot'];
 const CREDIT_MS = 8000;
 const now0 = () => Date.now();
+const HEIR_MS = 2000;
+const CODE_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+export const newCode = () => Array.from(crypto.getRandomValues(new Uint8Array(5)), (b) => CODE_ABC[b % 32]).join('');
 
 export class Room {
   constructor(id, name, hub, timings = {}) {
@@ -42,6 +45,11 @@ export class Room {
     this.public = false;
     this.autoStartAt = 0;
     this.played = 0;
+    // 방장 이전: 이어받을 사람에게 방 상태를 주기적으로 맡겨 둔다
+    this.heirCode = newCode();
+    this.lastHeir = 0;
+    this.carry = null; // 옛 방에서 넘어온 기록 (옛 아이디 → 기록)
+    this.pendingResume = 0; // 이어받은 경기의 남은 시간. 첫 사람이 들어오면 시작
   }
 
   // ---------- 대기실 ----------
@@ -83,7 +91,8 @@ export class Room {
   }
 
   add(player) {
-    if (!this.joinable()) return false;
+    const rec = this.carry?.get(player.was);
+    if (!this.joinable() && !rec) return false;
     // 사람이 오면 봇이 자리를 내준다
     if (this.players.length >= MAX_PLAYERS) {
       const bot = [...this.players].reverse().find((p) => p.isBot);
@@ -93,9 +102,15 @@ export class Room {
     player.room = this;
     player.ready = false;
     player.wins = 0;
+    if (rec) {
+      this.carry.delete(player.was);
+      player.wins = rec.wins ?? 0;
+      if (rec.kills !== undefined) player.carry = rec;
+    }
     player.name = this.uniqueName(player.name, player);
     this.players.push(player);
-    if (this.live()) this.dropIn(player);
+    if (this.pendingResume && !player.isBot) this.startMatch(this.pendingResume);
+    else if (this.live()) this.dropIn(player);
     this.armAutoStart();
     this.sendRoom();
     return true;
@@ -105,6 +120,7 @@ export class Room {
   dropIn(p) {
     p.resetForMatch();
     p.aura = Math.round(AURA_MAX * (MODES[this.mode].auraStart ?? 0));
+    this.applyCarry(p);
     p.ready = true;
     this.placeAtSpawn(p, this.players.filter((q) => q !== p && q.alive).map((q) => q.pos));
     if (!p.isBot) {
@@ -121,6 +137,42 @@ export class Room {
       if (this.state === 'playing') p.send({ t: 'go' });
     }
     this.broadcast({ t: 'sys', key: 'sys.joined', vars: { name: p.name } });
+  }
+
+  // 옛 방에서 쌓은 킬·아우라·기록을 되살린다
+  applyCarry(p) {
+    const c = p.carry;
+    if (!c) return;
+    p.carry = null;
+    p.kills = c.kills ?? 0;
+    p.aura = Math.min(AURA_MAX, Math.max(0, c.aura ?? p.aura));
+    for (const [k, v] of Object.entries(c.stats ?? {})) if (k in p.stats && finite(v)) p.stats[k] = v;
+  }
+
+  // 방장이 나가도 이어서 할 수 있게 지금 상태를 작게 담는다
+  save(now = Date.now()) {
+    const live = this.live();
+    const from = this.state === 'countdown' ? Math.max(now, this.stateUntil) : now;
+    return {
+      name: this.name, public: this.public, mode: this.mode, mapChoice: this.mapChoice, mapId: this.map.id,
+      played: this.played + (this.state === 'results' ? 1 : 0),
+      msLeft: live ? Math.max(5000, this.matchEndsAt - from) : 0,
+      players: this.players.map((p) => ({
+        id: p.id, name: p.name, skin: p.skin, look: p.look, loadout: p.loadout, isBot: p.isBot, wins: p.wins,
+        ...(live ? { kills: p.kills, aura: Math.round(p.aura), stats: p.stats } : {}),
+      })),
+    };
+  }
+
+  // 이어받을 사람(방장 말고 가장 먼저 온 사람)에게 상태를, 나머지에게는 새 방 코드를 알려 둔다
+  sendHeir(now) {
+    if (!this.hub.migrate || now - this.lastHeir < HEIR_MS) return;
+    this.lastHeir = now;
+    const guests = this.players.filter((p) => !p.isBot && !p.isLocal);
+    const heir = guests[0];
+    if (!heir) return;
+    const save = this.save(now);
+    for (const p of guests) p.send({ t: 'heir', code: this.heirCode, heir: heir.id, ...(p === heir ? { save } : {}) });
   }
 
   // 방에서 떼어 낸다. 걸려 있던 각성과 고양이도 정리
@@ -257,22 +309,25 @@ export class Room {
   }
 
   // ---------- 경기 ----------
-  startMatch() {
+  // resumeMs: 방장이 바뀌어 이어서 하는 경기의 남은 시간 (맵·점수 그대로, 짧은 카운트다운)
+  startMatch(resumeMs = 0) {
     const now = Date.now();
-    if (this.mapChoice === 'random') {
+    this.pendingResume = 0;
+    const cd = resumeMs ? Math.min(this.t.countdownMs, 3000) : this.t.countdownMs;
+    if (!resumeMs && this.mapChoice === 'random') {
       const rest = MAP_IDS.filter((m) => m !== this.map.id);
       this.map = MAPS[rest[Math.floor(Math.random() * rest.length)]];
     }
     this.state = 'countdown';
     this.autoStartAt = 0;
-    this.stateUntil = now + this.t.countdownMs;
+    this.stateUntil = now + cd;
     this.event = null;
     this.bombs = [];
     this.nukes = [];
     this.fallouts = [];
     this.peels = [];
-    this.nextEventAt = now + this.t.countdownMs + this.t.eventFirstMs;
-    this.matchEndsAt = now + this.t.countdownMs + (this.t.matchMs ?? MATCH_SECONDS * 1000);
+    this.nextEventAt = now + cd + this.t.eventFirstMs;
+    this.matchEndsAt = now + cd + (resumeMs || (this.t.matchMs ?? MATCH_SECONDS * 1000));
     this.pickups = this.map.pickups.map((p) => ({ ...p, active: true, respawnAt: 0 }));
 
     const taken = [];
@@ -280,13 +335,14 @@ export class Room {
     for (const p of this.players) {
       p.resetForMatch();
       p.aura = startAura;
+      this.applyCarry(p);
       this.placeAtSpawn(p, taken);
       taken.push(p.pos);
     }
     this.broadcast({
       t: 'matchStart',
       map: this.map.id,
-      countdownMs: this.t.countdownMs,
+      countdownMs: cd,
       endsIn: this.matchEndsAt - now,
       players: this.players.map((p) => ({ id: p.id, name: p.name, skin: p.skin, pos: p.pos, yaw: p.yaw, isBot: p.isBot, look: p.look })),
       pickups: this.pickups.map((p) => p.active),
@@ -324,6 +380,7 @@ export class Room {
   }
 
   tick(now, dt) {
+    this.sendHeir(now);
     if (this.state === 'lobby') {
       // 광고를 보는 사람이 있으면 끝날 때까지 기다린다
       if (this.autoStartAt && now >= this.autoStartAt && !this.players.some((p) => p.adBusy)) {
