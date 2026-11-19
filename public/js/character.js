@@ -112,7 +112,7 @@ function decal(text, size = 0.36, color = '#fff') {
   x.font = '900 104px Impact, "Segoe UI Emoji", sans-serif';
   x.textAlign = 'center';
   x.textBaseline = 'middle';
-  x.fillText(text, 64, 70);
+  x.fillText(text, 64, 70, 122);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false }));
@@ -214,7 +214,7 @@ const OUTFIT = {
   banana: { pants: 0xffd83a, shoe: 0x6b4a1c, iris: 0x3a2a1a, brow: 0x9a9080, browTilt: -0.35, lid: 0.7 },
   pedro: { pants: 0x5c5c66, shoe: 0x2a2a30, iris: 0x1a1a1a, brow: null },
   mew: { pants: 0x2a2a33, shoe: 0xf2f2f2, iris: 0x4a3020, brow: 0x2a1a10, browTilt: 0.28, lid: 0.45 },
-  ballerina: { pants: 0xfff0f4, shoe: 0xff8fc1, iris: 0x3a2014, brow: 0x5a3a20, browTilt: -0.1 },
+  washer: { pants: 0x3a6ea8, shoe: 0x2a2f3a, iris: 0x1a2a4a, brow: null },
 };
 
 export class Character {
@@ -477,9 +477,9 @@ export class Character {
     this.head.add(this.mouth);
 
     // 코와 귀
-    if (!['cat', 'hero', 'chill', 'cone', 'tung'].includes(skinId)) {
+    if (!['cat', 'hero', 'chill', 'cone', 'tung', 'washer'].includes(skinId)) {
       this.head.add(mesh(GEO.nose, skin, 0, -0.03, -0.53));
-      for (const s of [-1, 1]) if (!['streamer', 'banana', 'pedro', 'ballerina'].includes(skinId)) this.head.add(mesh(GEO.ear, skin, s * 0.52, 0.02, 0));
+      for (const s of [-1, 1]) if (!['streamer', 'banana', 'pedro', 'washer'].includes(skinId)) this.head.add(mesh(GEO.ear, skin, s * 0.52, 0.02, 0));
     }
 
     // 선글라스 (아우라 파밍 중에만)
@@ -868,30 +868,32 @@ export class Character {
       n.position.set(0, 1.04, -0.255);
       n.rotation.y = Math.PI;
       v.add(n);
-    } else if (skinId === 'ballerina') {
-      // 머리는 카푸치노 잔, 몸은 분홍 튀튀
+    } else if (skinId === 'washer') {
+      // 세탁기맨: 머리가 드럼 세탁기. 둥근 유리문 안에 얼굴, 위에 조작판
       this.head.children[0].visible = false;
-      const cup = lambert(0xfaf6ee);
-      this.head.add(mesh(new THREE.CylinderGeometry(0.56, 0.4, 0.86, 26), cup, 0, -0.04, 0));
-      this.head.add(mesh(new THREE.TorusGeometry(0.555, 0.04, 8, 28).rotateX(Math.PI / 2), cup, 0, 0.39, 0));
-      this.head.add(skipOutline(mesh(new THREE.CircleGeometry(0.53, 28).rotateX(-Math.PI / 2), lambert(0xb07a4a), 0, 0.37, 0)));
-      // 라떼 아트 하트
-      const heart = skipOutline(mesh(new THREE.CircleGeometry(0.2, 3).rotateX(-Math.PI / 2).rotateY(Math.PI), lambert(0xfff4e4), 0, 0.375, 0.02));
-      this.head.add(heart);
-      for (const s of [-1, 1]) this.head.add(skipOutline(mesh(new THREE.CircleGeometry(0.1, 14).rotateX(-Math.PI / 2), lambert(0xfff4e4), s * 0.08, 0.376, -0.1)));
-      const handle = mesh(new THREE.TorusGeometry(0.17, 0.05, 8, 16), cup, 0.6, -0.02, 0);
-      this.head.add(handle);
-      this.head.add(mesh(new THREE.CylinderGeometry(0.66, 0.66, 0.05, 28), cup, 0, -0.5, 0)); // 받침
-      const pink = lambert(0xff8fc1);
-      const tutu = mesh(new THREE.ConeGeometry(0.66, 0.3, 24, 1, true).rotateX(Math.PI), pink, 0, 0.7, 0);
-      tutu.material = tutu.material.clone();
-      tutu.material.side = THREE.DoubleSide;
-      v.add(tutu);
-      for (let i = 0; i < 12; i++) {
-        const a = (i / 12) * Math.PI * 2;
-        v.add(mesh(new THREE.SphereGeometry(0.1, 8, 6), pink, Math.cos(a) * 0.6, 0.58, Math.sin(a) * 0.6));
-      }
-      this.mouth.position.y = -0.24;
+      const white = lambert(0xeef1f5);
+      this.head.add(mesh(new THREE.BoxGeometry(1.04, 1.06, 0.84), white, 0, 0.06, 0.02));
+      const chrome = lambert(0xb8c2cf);
+      this.head.add(mesh(new THREE.TorusGeometry(0.4, 0.06, 10, 32), chrome, 0, 0, -0.43));
+      const glass = new THREE.MeshBasicMaterial({ color: 0x8fdcff, transparent: true, opacity: 0.22, depthWrite: false });
+      this.head.add(skipOutline(mesh(new THREE.CircleGeometry(0.39, 32).rotateY(Math.PI), glass, 0, 0, -0.68)));
+      this.head.add(skipOutline(mesh(new THREE.PlaneGeometry(0.07, 0.42).rotateY(Math.PI).rotateZ(-0.6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthWrite: false }), 0.2, 0.12, -0.69)));
+      // 조작판: 회색 띠, 다이얼 두 개, 초록 숫자
+      this.head.add(mesh(new THREE.BoxGeometry(1.0, 0.12, 0.05), lambert(0x5a6270), 0, 0.52, -0.44));
+      for (const x of [-0.36, 0.36]) this.head.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.06, 14).rotateX(Math.PI / 2), chrome, x, 0.52, -0.48));
+      const disp = decal('67', 0.1, '#4dff6a');
+      disp.position.set(0, 0.52, -0.475);
+      disp.rotation.y = Math.PI;
+      this.head.add(disp);
+      // 몸: 파란 작업복, 등에 배수 호스
+      const hose = mesh(new THREE.TorusGeometry(0.22, 0.045, 8, 16, Math.PI * 1.3), lambert(0x9aa4b2), 0, 0.75, 0.3);
+      hose.rotation.y = Math.PI / 2;
+      v.add(hose);
+      const n = decal('SPIN', 0.26, '#ffffff');
+      n.position.set(0, 1.04, -0.255);
+      n.rotation.y = Math.PI;
+      v.add(n);
+      this.mouth.position.set(0, -0.22, -0.5);
     }
     // 스니커즈처럼 앞코를 얹는다
     if (skinId !== 'toilet' && skinId !== 'tung') {
@@ -1166,15 +1168,14 @@ export class Character {
         this.foreZ = [0, -0.5];
         return [-0.1, -1.7 + sweep * 0.25];
       }
-      case 'ballerina': {
-        // 두 팔로 머리 위 동그라미, 천천히 돌며 발끝 서기
-        A.rotation.set(-2.9, 0, -0.32);
-        B.rotation.set(-2.9, 0, 0.32);
-        V.rotation.y = Math.sin(t * 0.9) * 0.6;
-        V.position.y = 0.06 + Math.abs(Math.sin(t * 1.8)) * 0.05;
-        this.legL.rotation.x = -0.5 + Math.sin(t * 1.8) * 0.2;
-        this.legL.userData.shin.rotation.x = 0.9;
-        return [-0.9, -0.9];
+      case 'washer': {
+        // 세탁기맨: 허리에 손 얹고 탈수 중인 세탁기처럼 덜덜덜
+        A.rotation.set(0.15, 0, -0.55);
+        B.rotation.set(0.15, 0, 0.55);
+        V.position.x = Math.sin(t * 55) * 0.025;
+        V.position.y = Math.abs(Math.sin(t * 40)) * 0.03;
+        H.rotation.z = Math.sin(t * 47) * 0.05;
+        return [-1.6, -1.6];
       }
       default: {
         // 민수: 멍하니 머리 긁기
@@ -1442,17 +1443,17 @@ export class Character {
       this.visual.rotation.z = 0;
       this.head.rotation.x = -this.pitch * 0.55 - 0.2;
       this.head.rotation.y = 0;
-    } else if (kind === 'ballerina') {
-      // 팔 벌리고 한 발로 팽이
+    } else if (kind === 'washer') {
+      // 팔 벌리고 탈수 팽이
       this.armL.rotation.set(0, 0, -1.45);
       this.armR.rotation.set(0, 0, 1.45);
       bendL = bendR = 0;
       this.visual.rotation.x = 0;
       this.visual.rotation.z = 0;
-      this.legL.rotation.x = -1.1;
-      this.legL.userData.shin.rotation.x = 1.2;
-      this.legR.rotation.x = 0;
-      this.legR.userData.shin.rotation.x = 0;
+      this.legL.rotation.x = -0.25;
+      this.legL.userData.shin.rotation.x = 0.4;
+      this.legR.rotation.x = -0.25;
+      this.legR.userData.shin.rotation.x = 0.4;
       this.head.rotation.y = 0;
     } else if (kind === 'toilet') {
       this.armL.rotation.set(0, 0, -1.45);
@@ -1505,7 +1506,7 @@ export class Character {
       }
       bendR = -0.1 - this.kick * 0.3;
       if (this.skinId === 'tung') {
-        // 사후르는 왼손에 빠따: 받치지 말고 옆으로 내려 든다
+        // 나무인간은 왼손에 빠따: 받치지 말고 옆으로 내려 든다
         this.armL.rotation.set(-0.35 - pump, 0, -0.12);
         bendL = -0.55;
       }
@@ -1525,7 +1526,7 @@ export class Character {
     }
 
     const dancing = this.danceUntil && performance.now() < this.danceUntil;
-    this.gun.visible = !this.lobby && this.emote === 0 && !dancing && !['cat', 'minsu', 'hero', 'chill', 'streamer', 'toilet', 'banana', 'pedro', 'ballerina'].includes(kind);
+    this.gun.visible = !this.lobby && this.emote === 0 && !dancing && !['cat', 'minsu', 'hero', 'chill', 'streamer', 'toilet', 'banana', 'pedro', 'washer'].includes(kind);
     if (this.gun2) this.gun2.visible = this.gun.visible && this.weaponId === 'dual';
 
     // 숙임과 꼬임
@@ -1548,7 +1549,7 @@ export class Character {
       });
     }
     if (kind === 'toilet') this.visual.rotation.y = t * 11;
-    if (kind === 'ballerina') this.visual.rotation.y = t * 16;
+    if (kind === 'washer') this.visual.rotation.y = t * 16;
     if (this.tears && !this.lobby) for (const d of this.tears) d.scale.y = kind === 'banana' ? 1.6 + Math.sin(t * 9) * 0.4 : 1;
     if (this.whirl) this.whirl.visible = this.whirl2.visible = kind === 'toilet';
     if (kind === 'toilet') {

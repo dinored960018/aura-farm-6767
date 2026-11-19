@@ -373,7 +373,7 @@ export class Room {
       if (this.state !== 'playing') return;
       if (p.alive && p.ultraKind === 'mew') this.tickMew(p, now);
       if (this.state !== 'playing') return;
-      if (p.alive && p.ultraKind === 'ballerina') this.tickSpin(p, now);
+      if (p.alive && p.ultraKind === 'washer') this.tickSpin(p, now);
       if (this.state !== 'playing') return;
       if (p.alive && p.ultraKind === 'chill') p.hp = Math.min(MAX_HP, round(p.hp + CHILL.regenPerSec * dt));
       if (p.alive && p.emote === 1 && now - p.movedAt > 150) {
@@ -603,7 +603,7 @@ export class Room {
     }
   }
 
-  // 발레리나: 돌면서 닿는 놈 갈기
+  // 세탁기맨: 돌면서 닿는 놈 갈기
   tickSpin(p, now) {
     if (now < p.ultraTick) return;
     p.ultraTick = now + SPIN.tickMs;
@@ -705,7 +705,7 @@ export class Room {
 
   disabled(p, now) { return now < p.charmUntil; }
 
-  // 사후르: 주변 전체 충격파. 스트리머: 바라보는 쪽으로 짖기.
+  // 나무인간: 주변 전체 충격파. 스트리머: 바라보는 쪽으로 짖기.
   tickContact(p, now) {
     if (now < p.ultraTick) return;
     const tung = p.ultraKind === 'tung';

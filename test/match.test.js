@@ -540,7 +540,7 @@ async function ultraRoom(skin) {
   return { ...started, a, b, ap, bp };
 }
 
-test('각성: 스트리머는 앞쪽만 날리고, 사후르는 사방으로 충격파를 날린다', async () => {
+test('각성: 스트리머는 앞쪽만 날리고, 나무인간는 사방으로 충격파를 날린다', async () => {
   const s = await ultraRoom('streamer');
   // a는 +z(상대 쪽)를 본다: yaw PI면 앞이 +z
   s.a.send({ t: 'state', p: s.ap, y: Math.PI, pi: 0, w: 'fart', e: 0 });
@@ -733,7 +733,7 @@ test('각성 특징: 칠가이는 총알을 되돌리고, 시그마는 킬마다
   await g.close();
 });
 
-test('각성 특징: 사후르 7번째가 제일 크고, 핵은 방사능을 남기며, 민수 레이저는 벽을 뚫는다', async () => {
+test('각성 특징: 나무인간 7번째가 제일 크고, 핵은 방사능을 남기며, 민수 레이저는 벽을 뚫는다', async () => {
   const t = await ultraRoom('tung');
   const waves = [];
   const done = new Promise((res) => {
@@ -814,7 +814,7 @@ test('무기 고르기: 고른 두 자루만 쏠 수 있고, 저격총은 머리
   await close();
 });
 
-test('새 캐릭터: 바나나 껍질 밟으면 날아가고, 페드로는 춤추게 하고, 뮤잉남은 바라보면 깎고, 발레리나는 닿으면 튕긴다', async () => {
+test('새 캐릭터: 바나나 껍질 밟으면 날아가고, 페드로는 춤추게 하고, 뮤잉남은 바라보면 깎고, 세탁기맨은 닿으면 튕긴다', async () => {
   // 바나나
   {
     const { cs: [a, b], close } = await startRoom(2, { skins: ['banana', 'minsu'] });
@@ -865,9 +865,9 @@ test('새 캐릭터: 바나나 껍질 밟으면 날아가고, 페드로는 춤�
     assert.ok(playerOf(b).aura < 1000, '아우라를 뺏긴다');
     await close();
   }
-  // 발레리나
+  // 세탁기맨
   {
-    const { cs: [a, b], close } = await startRoom(2, { skins: ['ballerina', 'minsu'] });
+    const { cs: [a, b], close } = await startRoom(2, { skins: ['washer', 'minsu'] });
     a.send({ t: 'state', p: [-20, 0, 12], y: 0, pi: 0, w: 'fart', e: 0 });
     b.send({ t: 'state', p: [-20, 0, 13.5], y: 0, pi: 0, w: 'fart', e: 0 });
     await sleep(60);

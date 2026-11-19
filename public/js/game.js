@@ -134,11 +134,13 @@ export const ULTRA_FX = {
   banana: { color: 0xffd83a, emit: (fx, p) => rise(fx, p, 0xffd83a, { size: 0.14, up: 2 }) },
   pedro: { color: 0xc59bff, emit: (fx, p, c, t) => { if (Math.random() < 0.6) fx.burst([p.x + Math.sin(t * 9) * 1.2, p.y + 2.2, p.z + Math.cos(t * 9) * 1.2], { n: 1, speed: 0.4, up: 1.5, color: Math.random() < 0.5 ? 0xff5fc0 : 0x60e0ff, size: 0.2, life: 0.6, hdr: 2.2 }); } },
   mew: { color: 0xfff1a8, emit: (fx, p) => rise(fx, p, 0xfff1a8, { size: 0.1, up: 3 }) },
-  ballerina: { color: 0xff8fc1, emit: (fx, p, c, t) => {
+  washer: { color: 0x7fd8ff, emit: (fx, p, c, t) => {
+    // 물보라와 비누거품이 빙글빙글
     for (let i = 0; i < 2; i++) {
       const a = t * 16 + i * Math.PI;
-      fx.burst([p.x + Math.cos(a) * 1.6, p.y + 1.1, p.z + Math.sin(a) * 1.6], { n: 1, speed: 0.2, color: 0xffc0dc, size: 0.22, size2: 0.05, life: 0.35, hdr: 2 });
+      fx.burst([p.x + Math.cos(a) * 1.6, p.y + 1.1, p.z + Math.sin(a) * 1.6], { n: 1, speed: 0.2, color: i ? 0xffffff : 0x7fd8ff, size: 0.22, size2: 0.05, life: 0.35, hdr: 2 });
     }
+    if (Math.random() < 0.4) rise(fx, p, 0xe8fbff, { size: 0.16, up: 2.5 });
   } },
   farm: { color: 0xffd21f, emit: (fx, p) => rise(fx, p, 0xffd21f, { size: 0.15 }) },
   sigma: { color: 0xffc800, emit: (fx, p) => { rise(fx, p, 0xffc800); rise(fx, p, 0xffffff, { size: 0.08, up: 5 }); } },
@@ -1064,7 +1066,7 @@ export class Game {
     this.effects.ring(m.pos, m.radius);
     this.effects.dust(m.pos, m.final ? 34 : 14, 0xc9975c);
     this.effects.flash([m.pos[0], m.pos[1] + 1, m.pos[2]], 0xffc233, m.final ? 90 : 30, m.final ? 28 : 12, m.final ? 0.4 : 0.2);
-    this.effects.text([m.pos[0], m.pos[1] + 3.4, m.pos[2]], m.final ? 'SAHUR!!!' : t('fx.tung'), { color: m.final ? '#ff5f1f' : '#ffc233', scale: m.final ? 2.8 : 1.1 + (m.n ?? 1) * 0.12, life: m.final ? 0.9 : 0.5 });
+    this.effects.text([m.pos[0], m.pos[1] + 3.4, m.pos[2]], m.final ? 'TIMBER!!!' : t('fx.tung'), { color: m.final ? '#ff5f1f' : '#ffc233', scale: m.final ? 2.8 : 1.1 + (m.n ?? 1) * 0.12, life: m.final ? 0.9 : 0.5 });
     if (m.final) this.effects.pillar(m.pos, 0xffc233, 12, 0.4);
     this.sfx.tungTung();
     const d = Math.hypot(this.body.x - m.pos[0], this.body.z - m.pos[2]);
@@ -1329,7 +1331,7 @@ export class Game {
       this.sfx.sparkle();
       this.sfx.say('just a chill guy', { pitch: 0.5, rate: 0.7 });
     } else if (kind === 'tung') {
-      this.sfx.say('tung tung tung sahur', { pitch: 0.2, rate: 0.9 });
+      this.sfx.say('wood wood wood man', { pitch: 0.2, rate: 0.9 });
     } else if (kind === 'rizz') {
       this.sfx.sparkle();
       this.sfx.say('rizz', { pitch: 0.2, rate: 0.5 });
@@ -1342,9 +1344,10 @@ export class Game {
     } else if (kind === 'mew') {
       this.sfx.vineBoom();
       this.sfx.say('mog', { pitch: 0.1, rate: 0.5 });
-    } else if (kind === 'ballerina') {
+    } else if (kind === 'washer') {
       this.sfx.boing(true);
-      this.sfx.say('ballerina cappuccina', { lang: 'it-IT', pitch: 1.3, rate: 1 });
+      this.sfx.say('spin cycle', { pitch: 0.7, rate: 1.4 });
+      this.hud.rain(['SPIN', '🫧', '🧦', '🫧'], 10);
     }
   }
 
@@ -1742,7 +1745,7 @@ export class Game {
     const opts = {
       map: this.map,
       gravityMul: this.eventKind === 'moon' ? 0.35 : 1,
-      speedMul: this.ultraKind === 'ballerina' ? SPIN.speedMul : this.ultraKind === 'sigma' || this.ultraKind === 'streamer' ? MOVE.ultraSpeedMul : performance.now() < this.slowUntil ? CHILL.slowMul : this.grabbedBy !== null ? 0.55 : 1,
+      speedMul: this.ultraKind === 'washer' ? SPIN.speedMul : this.ultraKind === 'sigma' || this.ultraKind === 'streamer' ? MOVE.ultraSpeedMul : performance.now() < this.slowUntil ? CHILL.slowMul : this.grabbedBy !== null ? 0.55 : 1,
     };
     const events = stepBodyFixed(this.body, {
       fwd, right, yaw: this.yaw, jump: this.jumpQueued && !this.frozen, dash: this.dashQueued && !this.frozen,

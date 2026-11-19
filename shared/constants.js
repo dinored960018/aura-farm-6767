@@ -101,14 +101,14 @@ export const ULTRAS = {
   cone: { name: '핵 모드', ms: 2600, desc: '조준한 곳에 핵. 터진 뒤 방사능 지대가 남음' },
   toilet: { name: '대물내림', ms: 5000, desc: '5초간 빨아들이고, 끝날 때 물기둥으로 다 띄움' },
   streamer: { name: '짖기 방송', ms: 4800, desc: '빨리 달리며 6번 짖기. 마지막은 사방으로 터지는 샤우팅' },
-  tung: { name: '사후르 타임', ms: 4700, desc: '점점 커지는 충격파 7번. 7번째 사후르가 제일 큼' },
+  tung: { name: '통나무 타임', ms: 4700, desc: '점점 커지는 충격파 7번. 7번째가 제일 큼' },
   hero: { name: '메가 펀치', ms: 5000, desc: '무적 상태로 셋을 관통. 때릴수록 세지고 주변까지 터짐' },
   rizz: { name: '리즈 매혹', ms: 3500, desc: '상대가 걸어오고 공격 못 함. 가까이 오면 아우라와 체력을 뺏음' },
   chill: { name: '완전 칠함', ms: 5000, desc: '5초간 무적에 체력 회복. 쏜 총알은 되돌아감. 주변은 느려짐' },
   banana: { name: '바나나 폭격', ms: 4200, desc: '앞으로 바나나 껍질 6개를 뿌림. 밟으면 미끄러져 날아가고 느려짐' },
   pedro: { name: '페드로 댄스', ms: 4000, desc: '주변 전원 강제로 춤춤. 춤추는 동안 공격 못 하고 체력이 깎임' },
   mew: { name: '모깅', ms: 5000, desc: '턱선 광선. 바라보는 상대의 체력과 아우라를 계속 뺏음' },
-  ballerina: { name: '카푸치노 회전', ms: 5000, desc: '빙글빙글 빠르게 돌며 닿는 놈을 갈아버리고 튕겨냄' },
+  washer: { name: '탈수 모드', ms: 5000, desc: '탈수 최대로 미친 듯이 돌며 닿는 놈을 빨아서 튕겨냄' },
 };
 
 export const EVENTS = {
@@ -126,14 +126,14 @@ export const SKINS = {
   cone: { name: '오하이오 주민', skin: 0x7fdc5a, shirt: 0x8a3ffc },
   toilet: { name: '변기맨', skin: 0xffc6a8, shirt: 0xffffff },
   streamer: { name: '짖는 스트리머', skin: 0x6e4426, shirt: 0xd81e2c },
-  tung: { name: '퉁퉁퉁 사후르', skin: 0xa8743f, shirt: 0x8f5f30 },
+  tung: { name: '나무나무나무인간', skin: 0xa8743f, shirt: 0x8f5f30 },
   hero: { name: '메가브로', skin: 0xf2c6a0, shirt: 0xe8342c },
   rizz: { name: '리즈왕', skin: 0xf2c6a0, shirt: 0xff3d9a },
   chill: { name: '칠가이', skin: 0xb98d62, shirt: 0x8b9099 },
   banana: { name: '바나나 고양이', skin: 0xf4f1ea, shirt: 0xffd83a },
   pedro: { name: '페드로 너구리', skin: 0x8e8e98, shirt: 0x6a6a74 },
   mew: { name: '뮤잉남', skin: 0xe8b48c, shirt: 0x1a1a1f },
-  ballerina: { name: '발레리나 카푸치나', skin: 0xf5d6c0, shirt: 0xff8fc1 },
+  washer: { name: '세탁기맨', skin: 0xeef1f5, shirt: 0x5fb8ff },
 };
 export const SKIN_IDS = Object.keys(SKINS);
 

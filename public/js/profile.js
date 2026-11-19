@@ -4,7 +4,7 @@ import { SKIN_IDS } from '../shared/constants.js';
 
 const KEY = 'aura-profile-v1';
 export const START_SKINS = ['minsu', 'sigma', 'cat', 'toilet'];
-export const UNLOCK_LEVEL = { cone: 2, streamer: 3, banana: 3, tung: 4, hero: 5, pedro: 5, rizz: 6, chill: 7, mew: 8, ballerina: 9 };
+export const UNLOCK_LEVEL = { cone: 2, streamer: 3, banana: 3, tung: 4, hero: 5, pedro: 5, rizz: 6, chill: 7, mew: 8, washer: 9 };
 
 // 다음 레벨까지 필요한 경험치. 봇전 한 판이 대략 80~150
 export const xpNeed = (level) => 120 + (level - 1) * 60;
