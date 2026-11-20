@@ -12,6 +12,8 @@ const HIP = {
   fart: [0.22, -0.215, -0.66], six7: [0.2, -0.2, -0.6], boom: [0.22, -0.22, -0.7],
   sniper: [0.21, -0.215, -0.72], ice: [0.23, -0.225, -0.68], dual: [0.23, -0.15, -0.5],
 };
+// 조준 자리. 기본은 총을 화면 가운데로. 쌍권총은 두 자루(오른쪽 0, 왼쪽 -0.42)가 조준점 양옆에 오게
+const ADS = { dual: [0.21, -0.14, -0.46] };
 
 // 총마다 다른 손맛
 const FEEL = {
@@ -301,7 +303,7 @@ export class ViewModel {
     const bx = Math.sin(this.walk) * 0.018 * b;
     const by = -Math.abs(Math.cos(this.walk)) * 0.016 * b;
     const hip = HIP[this.id] ?? HIP.fart;
-    const ads = [0.0, hip[1] + 0.06, hip[2] + 0.06];
+    const ads = ADS[this.id] ?? [0.0, hip[1] + 0.06, hip[2] + 0.06];
     const base = hip.map((v, i) => v + (ads[i] - v) * this.aim);
     r.position.set(
       base[0] + bx + s.sway[0] * 0.09 - this.sprint * 0.06,

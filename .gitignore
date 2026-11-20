@@ -3,3 +3,4 @@ node_modules/
 dist/
 dist-crazygames/
 *-crazygames.zip
+dist-crazygames-flat/
