@@ -12,8 +12,14 @@ const HIP = {
   fart: [0.22, -0.215, -0.66], six7: [0.2, -0.2, -0.6], boom: [0.22, -0.22, -0.7],
   sniper: [0.21, -0.215, -0.72], ice: [0.23, -0.225, -0.68], dual: [0.23, -0.15, -0.5],
 };
-// 조준 자리. 기본은 총을 화면 가운데로. 쌍권총은 두 자루(오른쪽 0, 왼쪽 -0.42)가 조준점 양옆에 오게
-const ADS = { dual: [0.21, -0.14, -0.46] };
+// 조준 자리. 기본은 총을 화면 가운데로. 쌍권총은 두 자루(오른쪽 0, 왼쪽 -0.42)가 조준점 양옆에 오게.
+// 몸통이 큰 총(방석·나팔·통)은 더 내려서 조준점이 가려지지 않게
+const ADS = {
+  dual: [0.21, -0.14, -0.46],
+  fart: [0, -0.25, -0.62],
+  boom: [0, -0.27, -0.66],
+  ice: [0, -0.26, -0.64],
+};
 
 // 총마다 다른 손맛
 const FEEL = {
@@ -293,7 +299,8 @@ export class ViewModel {
     this.bob = (this.bob ?? 0) + (bobAmt - (this.bob ?? 0)) * Math.min(1, dt * 8);
     const wantSprint = s.speed > 7.2 && s.onGround && this.lastShot > 0.35 && !s.zoom && s.reloadK < 0 ? 1 : 0;
     this.sprint += (wantSprint - this.sprint) * Math.min(1, dt * 7);
-    this.aim += ((s.zoom ? 1 : 0) - this.aim) * Math.min(1, dt * 12);
+    // 장전 중엔 조준을 풀어 장전 모션이 얼굴 앞을 가리지 않게
+    this.aim += ((s.zoom && s.reloadK < 0 ? 1 : 0) - this.aim) * Math.min(1, dt * 12);
     this.strafe += (clamp(s.side / 9, -1, 1) - this.strafe) * Math.min(1, dt * 6);
     const breathe = Math.sin(s.t * 1.7);
 
