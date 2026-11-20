@@ -6,7 +6,7 @@ export const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const LINES = {
   en: {
     kill: ['EYES REMOVED', 'SKILL ISSUE', 'L + RATIO', 'GG EZ', 'SHIPPED TO OHIO', 'NPC DELETED', 'SIGMA MOVE', 'COPE', 'SEETHE', 'DO YOUR HOMEWORK',
-      'CLOCK OUT', 'LOL LOL LOL', 'SIX SEVEN!', 'FANUM TAX', 'AURA GAP', 'FUNDAMENTALS ISSUE', 'TRALALERO TRALALA', 'MOGGED', 'WHAT WAS THAT?', 'WHERE ARE YOUR EYES?', 'TOUCH GRASS'],
+      'CLOCK OUT', 'LOL LOL LOL', 'SIX SEVEN!', 'FANUM TAX', 'AURA GAP', 'FUNDAMENTALS ISSUE', 'NPC BEHAVIOR', 'MOGGED', 'WHAT WAS THAT?', 'WHERE ARE YOUR EYES?', 'TOUCH GRASS'],
     death: ['SKILL ISSUE', 'BRUH', 'HOW?', 'LOST YOUR EYES', 'YOU ARE THE NPC', 'AURA BANKRUPT', 'UNPLUG YOUR MOUSE', 'IS THIS AN FPS?',
       'CERTIFIED OHIO', 'WAS THAT ON PURPOSE?', 'THAT GOT CLIPPED', 'MOM SAYS DINNER', 'CRINGE'],
     fall: ['STRAIGHT TO OHIO', 'FELL BY YOURSELF LOL', "CAN'T SEE THE FLOOR?", 'DO YOU HAVE EYES?', 'FREEFALL MASTER'],
@@ -15,13 +15,13 @@ const LINES = {
       'Chicken restores health (no medical basis)', 'Man runs out of aura choosing a menu', 'Hat industry nervous as big head era begins', 'Shotgun going boom is normal, says shotgun'],
     win: ['CERTIFIED SIGMA', 'MAIN CHARACTER', 'AURA BILLIONAIRE', 'EYEBALL COLLECTOR', 'MAYOR OF OHIO'],
     lose: ['CERTIFIED NPC', 'AURA BANKRUPT', 'EYEBALL DONOR', 'EXILED FROM OHIO', 'GRADE A SKILL ISSUE'],
-    reload: ['reloading lol', 'one sec', 'tung tung tung', 'loading...', 'buying bullets'],
+    reload: ['reloading lol', 'one sec', 'clack clack clack', 'loading...', 'buying bullets'],
     claw: ['MEOW!', 'SCRATCH!', '💢', '🐾', 'HISS'],
   },
   ko: {
     kill: ['눈깔 적출 완료', 'SKILL ISSUE', '응 아니야~', '어쩔티비', '저쩔티비', 'GG EZ', '오하이오로 택배 발송',
       'NPC 처리 완료', 'SIGMA MOVE', '킹받쥬?', '숙제해', '퇴근하세요', 'ㅋㅋㅋㅋㅋㅋㅋ', 'SIX SEVEN!',
-      'FANUM TAX 징수', 'L + RATIO', '아우라 차이 실화냐', '기본기 이슈', '럭키비키잖아', 'TRALALERO TRALALA',
+      'FANUM TAX 징수', 'L + RATIO', '아우라 차이 실화냐', '기본기 이슈', '럭키비키잖아', 'NPC 행동',
       '폼 미쳤다', '이게 맞냐', 'MOGGED', '너 지금 뭐함?', '눈깔 어디 갔음?'],
     death: ['스킬 이슈', 'BRUH', '왜 맞음?', '눈깔 잃어버림', '너 NPC임', '아우라 파산', '마우스 뽑아라', '이게 FPS임?',
       '오하이오 주민 판정', '지금 그거 일부러임?', '방금 그거 클립 따였음', '엄마가 밥 먹으래', 'CRINGE'],

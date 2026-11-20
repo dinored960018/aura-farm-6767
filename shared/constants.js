@@ -106,13 +106,13 @@ export const ULTRAS = {
   rizz: { name: '리즈 매혹', ms: 3500, desc: '상대가 걸어오고 공격 못 함. 가까이 오면 아우라와 체력을 뺏음' },
   chill: { name: '완전 칠함', ms: 5000, desc: '5초간 무적에 체력 회복. 쏜 총알은 되돌아감. 주변은 느려짐' },
   banana: { name: '바나나 폭격', ms: 4200, desc: '앞으로 바나나 껍질 6개를 뿌림. 밟으면 미끄러져 날아가고 느려짐' },
-  pedro: { name: '페드로 댄스', ms: 4000, desc: '주변 전원 강제로 춤춤. 춤추는 동안 공격 못 하고 체력이 깎임' },
+  pedro: { name: '디스코 타임', ms: 4000, desc: '주변 전원 강제로 춤춤. 춤추는 동안 공격 못 하고 체력이 깎임' },
   mew: { name: '모깅', ms: 5000, desc: '턱선 광선. 바라보는 상대의 체력과 아우라를 계속 뺏음' },
   washer: { name: '탈수 모드', ms: 5000, desc: '탈수 최대로 미친 듯이 돌며 닿는 놈을 빨아서 튕겨냄' },
 };
 
 export const EVENTS = {
-  dogfight: { name: '🐶✈️ 봄바르디로 도기로 공습!!', ms: 7000, say: 'Bombardiro Doggilo' },
+  dogfight: { name: '🐶✈️ 멍멍 공군 출격!!', ms: 7000, say: 'air dog raid' },
   sixseven: { name: '6️⃣7️⃣ 67 타임: 모든 데미지 67', ms: 6700, say: 'six seven, six seven' },
   bighead: { name: '🗿 대두 시대: 머리 판정 대폭발', ms: 13000, say: '대두 시대' },
   moon: { name: '🌙 오하이오 저중력', ms: 13000, say: 'only in ohio' },
@@ -131,7 +131,7 @@ export const SKINS = {
   rizz: { name: '리즈왕', skin: 0xf2c6a0, shirt: 0xff3d9a },
   chill: { name: '칠가이', skin: 0xb98d62, shirt: 0x8b9099 },
   banana: { name: '바나나 고양이', skin: 0xf4f1ea, shirt: 0xffd83a },
-  pedro: { name: '페드로 너구리', skin: 0x8e8e98, shirt: 0x6a6a74 },
+  pedro: { name: '디스코 너구리', skin: 0x8e8e98, shirt: 0x6a6a74 },
   mew: { name: '뮤잉남', skin: 0xe8b48c, shirt: 0x1a1a1f },
   washer: { name: '세탁기맨', skin: 0xeef1f5, shirt: 0x5fb8ff },
 };

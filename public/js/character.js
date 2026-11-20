@@ -1149,7 +1149,7 @@ export class Character {
         return [-1.45, -1.45];
       }
       case 'pedro': {
-        // 페드로 페드로 페드로: 리듬 타며 좌우로 들썩
+        // 디스코 디스코: 리듬 타며 좌우로 들썩
         const beat = t * 6.2;
         V.position.y = Math.abs(Math.sin(beat)) * 0.12;
         V.rotation.y = Math.sin(beat * 0.5) * 0.55;
@@ -1424,7 +1424,7 @@ export class Character {
       this.visual.rotation.z = 0;
       this.head.rotation.y = 0;
     } else if (kind === 'pedro' || (this.danceUntil && performance.now() < this.danceUntil)) {
-      // 페드로 댄스 (당한 사람도 똑같이 춘다)
+      // 디스코 타임 (당한 사람도 똑같이 춘다)
       const beat = t * 9;
       this.armL.rotation.set(-2.6 + Math.sin(beat) * 0.4, 0, 0.6);
       this.armR.rotation.set(-2.6 - Math.sin(beat) * 0.4, 0, -0.6);

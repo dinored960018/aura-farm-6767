@@ -1217,7 +1217,7 @@ export class Game {
     this.peelMeshes = [];
   }
 
-  // 페드로 댄스에 걸림: 그 자리에서 춤만 춘다
+  // 디스코 타임에 걸림: 그 자리에서 춤만 춘다
   onDance(m) {
     const c = this.chars.get(m.to);
     if (c) {
@@ -1339,8 +1339,8 @@ export class Game {
       this.sfx.squeak();
       this.sfx.say(t('tts.banana'), { lang: ttsLang(), pitch: 1.8, rate: 0.9 });
     } else if (kind === 'pedro') {
-      this.sfx.say('pedro pedro pedro', { pitch: 1.4, rate: 1.2 });
-      this.hud.rain(['PEDRO', 'PEDRO', '🦝', '🎶'], 10);
+      this.sfx.say('disco disco disco', { pitch: 1.4, rate: 1.2 });
+      this.hud.rain(['DISCO', '🪩', '🦝', '🎶'], 10);
     } else if (kind === 'mew') {
       this.sfx.vineBoom();
       this.sfx.say('mog', { pitch: 0.1, rate: 0.5 });
